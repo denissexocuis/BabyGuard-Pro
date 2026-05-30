@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # broker mosquitto
+  broker:
+    image: eclipse-mosquitto:latest
+    container_name: bg_broker
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    restart: always
+
+  # node-red
+  nodered:
+    image: nodered/node-red:latest
+    container_name: bg_nodered
+    ports:
+      - "1880:1880"
+    volumes:
+      - ./nodered_data:/data
+    depends_on:
+      - broker
+    restart: always
+
+  # mysql
+  database:
+    image: mysql:8.0
+    container_name: bg_mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: babyguard_db
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: always
+
+  # python, opencv y mediapipe
+  ia_engine:
+    image: python:3.10-slim
+    container_name: bg_ia_motor
+    volumes:
+      - ./ia_engine:/app
+    working_dir: /app
+    # mantener el contenedor vivo instalando dependencias y corriendo el script
+    command: >
+      sh -c "pip install --no-cache-dir opencv-python-headless mediapipe paho-mqtt && 
+             python motor_ia.py"
+    depends_on:
+      - broker
+    restart: always
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
+  mysql_data:
