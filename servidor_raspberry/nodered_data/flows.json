@@ -1,0 +1,402 @@
+[
+    {
+        "id": "d91c9fe113d81add",
+        "type": "tab",
+        "label": "Flux 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "39299944dd91a122",
+        "type": "mqtt-broker",
+        "name": "mqtt_in",
+        "broker": "broker",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "97437f360d10d0c7",
+        "type": "ui_base",
+        "theme": {
+            "name": "theme-custom",
+            "lightTheme": {
+                "default": "#0094CE",
+                "baseColor": "#0094CE",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                "edited": true,
+                "reset": false
+            },
+            "darkTheme": {
+                "default": "#097479",
+                "baseColor": "#097479",
+                "baseFont": "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen-Sans,Ubuntu,Cantarell,Helvetica Neue,sans-serif",
+                "edited": true,
+                "reset": false
+            },
+            "customTheme": {
+                "name": "Tema_BabyGuardPro",
+                "default": "#4B7930",
+                "baseColor": "#b3e5fc",
+                "baseFont": "Verdana,Verdana,Geneva,sans-serif",
+                "reset": false
+            },
+            "themeState": {
+                "base-color": {
+                    "default": "#4B7930",
+                    "value": "#b3e5fc",
+                    "edited": true
+                },
+                "page-titlebar-backgroundColor": {
+                    "value": "#b3e5fc",
+                    "edited": false
+                },
+                "page-backgroundColor": {
+                    "value": "#fdf5e6",
+                    "edited": true
+                },
+                "page-sidebar-backgroundColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "group-textColor": {
+                    "value": "#1a237e",
+                    "edited": true
+                },
+                "group-borderColor": {
+                    "value": "#ffffff",
+                    "edited": false
+                },
+                "group-backgroundColor": {
+                    "value": "#b3e5fc",
+                    "edited": true
+                },
+                "widget-textColor": {
+                    "value": "#1a237e",
+                    "edited": true
+                },
+                "widget-backgroundColor": {
+                    "value": "#b3e5fc",
+                    "edited": false
+                },
+                "widget-borderColor": {
+                    "value": "#eeeeee",
+                    "edited": true
+                },
+                "base-font": {
+                    "value": "Verdana,Verdana,Geneva,sans-serif"
+                }
+            },
+            "angularTheme": {
+                "primary": "indigo",
+                "accents": "blue",
+                "warn": "red",
+                "background": "grey",
+                "palette": "light"
+            }
+        },
+        "site": {
+            "name": "BabyGuard Pro",
+            "hideToolbar": "false",
+            "allowSwipe": "false",
+            "lockMenu": "false",
+            "allowTempTheme": "true",
+            "dateFormat": "DD/MM/YYYY",
+            "sizes": {
+                "sx": 48,
+                "sy": 48,
+                "gx": 6,
+                "gy": 6,
+                "cx": 6,
+                "cy": 6,
+                "px": 0,
+                "py": 0
+            }
+        }
+    },
+    {
+        "id": "24789a7f1970df69",
+        "type": "ui_tab",
+        "name": "BabyGuard Pro",
+        "icon": "fa-child",
+        "order": 1,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "89f715b16d44d461",
+        "type": "ui_group",
+        "name": "Variables Ambientales",
+        "tab": "24789a7f1970df69",
+        "order": 1,
+        "disp": true,
+        "width": 21,
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "95f19873721a47ea",
+        "type": "mqtt in",
+        "z": "d91c9fe113d81add",
+        "name": "",
+        "topic": "babyguard/sensores",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "39299944dd91a122",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 110,
+        "y": 180,
+        "wires": [
+            [
+                "0148292ec36d87fc"
+            ]
+        ]
+    },
+    {
+        "id": "0148292ec36d87fc",
+        "type": "json",
+        "z": "d91c9fe113d81add",
+        "name": "",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 270,
+        "y": 180,
+        "wires": [
+            [
+                "ea9e1748fe6d76bf",
+                "c1569bfe22a282e8",
+                "231e49ddd857227a",
+                "28c90f232654a060"
+            ]
+        ]
+    },
+    {
+        "id": "ea9e1748fe6d76bf",
+        "type": "change",
+        "z": "d91c9fe113d81add",
+        "name": "paylodad_temp",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "payload.temp",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 440,
+        "y": 120,
+        "wires": [
+            [
+                "618c7244b2d65467"
+            ]
+        ]
+    },
+    {
+        "id": "c1569bfe22a282e8",
+        "type": "change",
+        "z": "d91c9fe113d81add",
+        "name": "payload_humedad",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "payload.humedad",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 450,
+        "y": 200,
+        "wires": [
+            [
+                "45545976ccb9d078"
+            ]
+        ]
+    },
+    {
+        "id": "231e49ddd857227a",
+        "type": "change",
+        "z": "d91c9fe113d81add",
+        "name": "payload_ruido",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "payload.ruido",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 440,
+        "y": 260,
+        "wires": [
+            [
+                "793a130b599e2d98"
+            ]
+        ]
+    },
+    {
+        "id": "618c7244b2d65467",
+        "type": "ui_gauge",
+        "z": "d91c9fe113d81add",
+        "name": "",
+        "group": "89f715b16d44d461",
+        "order": 2,
+        "width": 7,
+        "height": 5,
+        "gtype": "gage",
+        "title": "Temperatura",
+        "label": "°C",
+        "format": "{{value}}",
+        "min": 0,
+        "max": "50",
+        "colors": [
+            "#ffff00",
+            "#00b500",
+            "#ca3838"
+        ],
+        "seg1": "20",
+        "seg2": "30",
+        "diff": false,
+        "className": "",
+        "x": 710,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "45545976ccb9d078",
+        "type": "ui_gauge",
+        "z": "d91c9fe113d81add",
+        "name": "",
+        "group": "89f715b16d44d461",
+        "order": 3,
+        "width": 7,
+        "height": 5,
+        "gtype": "gage",
+        "title": "Humedad",
+        "label": "%",
+        "format": "{{value}}",
+        "min": 0,
+        "max": "100",
+        "colors": [
+            "#ffff00",
+            "#00b500",
+            "#ca3838"
+        ],
+        "seg1": "40",
+        "seg2": "70",
+        "diff": false,
+        "className": "",
+        "x": 720,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "793a130b599e2d98",
+        "type": "ui_gauge",
+        "z": "d91c9fe113d81add",
+        "name": "",
+        "group": "89f715b16d44d461",
+        "order": 1,
+        "width": 7,
+        "height": 5,
+        "gtype": "gage",
+        "title": "Nivel de ruido",
+        "label": "dB",
+        "format": "{{value}}",
+        "min": 0,
+        "max": "120",
+        "colors": [
+            "#00b500",
+            "#e6e600",
+            "#ca3838"
+        ],
+        "seg1": "50",
+        "seg2": "80",
+        "diff": false,
+        "className": "",
+        "x": 720,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "28c90f232654a060",
+        "type": "debug",
+        "z": "d91c9fe113d81add",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 400,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "c491a2caa4305751",
+        "type": "ui_template",
+        "z": "d91c9fe113d81add",
+        "group": "89f715b16d44d461",
+        "name": "",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "format": "<script>\n    (function() {\n        var link = document.querySelector(\"link[rel*='icon']\") || document.createElement('link');\n        link.type = 'image/x-icon';\n        link.rel = 'shortcut icon';\n        \n        link.href = 'https://cdn-icons-png.magnific.com/256/11702/11702080.png'; \n        \n        document.getElementsByTagName('head')[0].appendChild(link);\n    })();\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 300,
+        "y": 460,
+        "wires": [
+            []
+        ]
+    }
+]
