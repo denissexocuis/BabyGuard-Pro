@@ -733,8 +733,7 @@
         "y": 360,
         "wires": [
             [
-                "79b3da2a322e1729",
-                "8688761a73b54808"
+                "ca8844ada4e7d36b"
             ]
         ]
     },
@@ -753,7 +752,7 @@
         "className": "",
         "topic": "",
         "name": "",
-        "x": 580,
+        "x": 700,
         "y": 360,
         "wires": []
     },
@@ -961,7 +960,7 @@
         "bot": "c720f7f694f4d5cc",
         "haserroroutput": false,
         "outputs": 1,
-        "x": 580,
+        "x": 700,
         "y": 400,
         "wires": [
             [
@@ -981,8 +980,29 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 820,
+        "x": 940,
         "y": 400,
         "wires": []
+    },
+    {
+        "id": "ca8844ada4e7d36b",
+        "type": "function",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "function 2",
+        "func": "msg.payload = {\n    \"type\": \"message\",\n    \"content\": \"ALERTA: bebe esta en peligro!!!\"\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 500,
+        "y": 360,
+        "wires": [
+            [
+                "79b3da2a322e1729",
+                "8688761a73b54808"
+            ]
+        ]
     }
 ]
