@@ -43,12 +43,13 @@ services:
     image: python:3.10-slim
     container_name: bg_ia_motor
     volumes:
-      - ./ia_engine:/app
+      - ../IA:/app
     working_dir: /app
     # mantener el contenedor vivo instalando dependencias y corriendo el script
     command: >
-      sh -c "pip install --no-cache-dir opencv-python-headless mediapipe paho-mqtt && 
-             python motor_ia.py"
+      sh -c "apt-get update && apt-get install -y libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libxcb1 && 
+      pip install --no-cache-dir opencv-python-headless mediapipe==0.10.14 paho-mqtt==1.6.1 && 
+      python motor_ia.py"
     depends_on:
       - broker
     restart: always
