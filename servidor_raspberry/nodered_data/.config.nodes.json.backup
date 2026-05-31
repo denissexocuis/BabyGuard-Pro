@@ -665,5 +665,25 @@
                 "file": "/data/node_modules/node-red-dashboard/nodes/ui_spacer.js"
             }
         }
+    },
+    "node-red-node-mysql": {
+        "name": "node-red-node-mysql",
+        "version": "3.0.0",
+        "local": true,
+        "user": true,
+        "nodes": {
+            "mysql": {
+                "name": "mysql",
+                "types": [
+                    "MySQLdatabase",
+                    "mysql"
+                ],
+                "enabled": true,
+                "local": true,
+                "user": false,
+                "module": "node-red-node-mysql",
+                "file": "/data/node_modules/node-red-node-mysql/68-mysql.js"
+            }
+        }
     }
 }

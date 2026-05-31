@@ -157,7 +157,7 @@
     {
         "id": "89f715b16d44d461",
         "type": "ui_group",
-        "name": "Variables Ambientales",
+        "name": "Cámara en Vivo",
         "tab": "24789a7f1970df69",
         "order": 2,
         "disp": true,
@@ -202,9 +202,36 @@
         "name": "Database_BabyGuard",
         "host": "bg_mysql",
         "port": "3306",
-        "db": "{{env.MYSQL_DATABASE}}",
+        "db": "${MYSQL_DATABASE}",
         "tz": "",
         "charset": "UTF8"
+    },
+    {
+        "id": "c720f7f694f4d5cc",
+        "type": "telegram bot",
+        "botname": "BabyGuard Bot",
+        "usernames": "",
+        "chatids": "${TELEGRAM_CHAT_ID}",
+        "baseapiurl": "",
+        "testenvironment": false,
+        "updatemode": "polling",
+        "pollinterval": 300,
+        "usesocks": false,
+        "sockshost": "",
+        "socksprotocol": "socks5",
+        "socksport": 6667,
+        "socksusername": "anonymous",
+        "sockspassword": "",
+        "bothost": "",
+        "botpath": "",
+        "localbothost": "0.0.0.0",
+        "localbotport": 8443,
+        "publicbotport": 8443,
+        "privatekey": "",
+        "certificate": "",
+        "useselfsignedcertificate": false,
+        "sslterminated": false,
+        "verboselogging": false
     },
     {
         "id": "95f19873721a47ea",
@@ -707,7 +734,7 @@
         "wires": [
             [
                 "79b3da2a322e1729",
-                "7045fa575f6f7865"
+                "8688761a73b54808"
             ]
         ]
     },
@@ -729,24 +756,6 @@
         "x": 580,
         "y": 360,
         "wires": []
-    },
-    {
-        "id": "7045fa575f6f7865",
-        "type": "function",
-        "z": "cdfa6a64c8bdf5d5",
-        "name": "telegram sender",
-        "func": "// Node-RED busca automáticamente la variable TELEGRAM_CHAT_ID del .env\nvar ChatId = env.get(\"TELEGRAM_CHAT_ID\");\n\nmsg.payload = {\n    chatId: ChatId,\n    type: \"message\",\n    content: \"🚨 Alerta: El rostro del bebé no se detecta o está cubierto. Revisa el streaming de inmediato.\"\n};\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 580,
-        "y": 400,
-        "wires": [
-            []
-        ]
     },
     {
         "id": "b0b873e5562a7c42",
@@ -942,6 +951,38 @@
         "info": "",
         "x": 620,
         "y": 660,
+        "wires": []
+    },
+    {
+        "id": "8688761a73b54808",
+        "type": "telegram sender",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "BabyGuard Bot",
+        "bot": "c720f7f694f4d5cc",
+        "haserroroutput": false,
+        "outputs": 1,
+        "x": 580,
+        "y": 400,
+        "wires": [
+            [
+                "cf875abe48314e5b"
+            ]
+        ]
+    },
+    {
+        "id": "cf875abe48314e5b",
+        "type": "debug",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "debug 2",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 820,
+        "y": 400,
         "wires": []
     }
 ]
