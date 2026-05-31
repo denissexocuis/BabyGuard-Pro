@@ -21,6 +21,8 @@ services:
       - "1880:1880"
     volumes:
       - ./nodered_data:/data
+    env_file:
+      - .env  # para poner las variables de entorno en node-red
     depends_on:
       - broker
     restart: always

@@ -4,6 +4,7 @@
     "version": "0.0.1",
     "private": true,
     "dependencies": {
-        "node-red-dashboard": "~3.6.6"
+        "node-red-dashboard": "~3.6.6",
+        "node-red-node-mysql": "~3.0.0"
     }
 }
