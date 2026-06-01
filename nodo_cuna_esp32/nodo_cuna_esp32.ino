@@ -57,14 +57,51 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println(messageTemp);
 
   // 17. Evaluar si se debe activar el buzzer
+  // 17. Evaluar si se debe activar el buzzer
   // Comprobamos si el tópico es el correcto y si el JSON contiene "activar": true o "activar":true
   if (String(topic) == "babyguard/cmd_buzzer") {
     if (messageTemp.indexOf("\"activar\":true") != -1 || messageTemp.indexOf("\"activar\": true") != -1) {
-      Serial.println("¡ALERTA RECIBIDA! Activando buzzer por 3 segundos...");
-      digitalWrite(PIN_BUZZER, HIGH);
-      delay(3000);
-      digitalWrite(PIN_BUZZER, LOW);
-      Serial.println("Buzzer desactivado. Retornando a monitoreo normal.");
+      Serial.println("¡ALERTA RECIBIDA! Tocando Piranha Plant Lullaby (SM64)...");
+      
+      // --- NOTAS DE SUPER MARIO 64 ---
+      // Frecuencias base en Hz
+      int C4 = 262; int D4 = 294; int E4 = 330; int F4 = 349; int G4 = 392; int A4 = 440; int B4 = 494;
+      int C5 = 523; int D5 = 587; int E5 = 659; int F5 = 698; int G5 = 784; int A5 = 880;
+
+      // Arreglo con la melodía principal de la planta piraña durmiendo
+      int melodia[] = {
+        E5, D5, C5, B4, A4, B4, C5, E5,
+        D5, C5, B4, A4, B4, C5, A4,
+        E5, D5, C5, B4, A4, B4, C5, E5,
+        G5, F5, E5, D5, C5, E5, D5
+      };
+
+      // Duraciones: 4 = negra, 8 = corchea, 2 = blanca
+      int duracion[] = {
+        4,  4,  4,  4,  4,  4,  2,  4,
+        4,  4,  4,  4,  4,  2,  2,
+        4,  4,  4,  4,  4,  4,  2,  4,
+        4,  4,  4,  4,  4,  2,  1  // La última nota es larga
+      };
+      
+      int totalNotas = sizeof(melodia) / sizeof(melodia[0]);
+      
+      for (int estaNota = 0; estaNota < totalNotas; estaNota++) {
+        // Calcular el tiempo que dura cada nota
+        int duracionMilisegundos = 1000 / duracion[estaNota];
+        
+        // El pin 4 es el PIN_BUZZER que configuró Armando
+        tone(PIN_BUZZER, melodia[estaNota], duracionMilisegundos);
+        
+        // Espaciado dinámico entre notas para que suene fluido el vals
+        int pausaEntreNotas = duracionMilisegundos * 1.30;
+        delay(pausaEntreNotas);
+        
+        noTone(PIN_BUZZER); // Detener el tono actual antes del que sigue
+      }
+      // -----------------------------------------------------------
+
+      Serial.println("Canción finalizada. Retornando a monitoreo normal.");
     }
   }
 }

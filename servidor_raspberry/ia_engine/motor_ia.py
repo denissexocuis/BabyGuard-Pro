@@ -3,12 +3,40 @@ import mediapipe as mp
 import time
 import base64
 import json
+import threading
 import paho.mqtt.client as mqtt
+from flask import Flask, Response
 
+# stream de video para Node-RED con flask
+app = Flask(__name__)
+output_frame = None
+lock = threading.Lock()
 
+def generar_stream():
+    global output_frame
+    while True:
+        with lock:
+            if output_frame is None:
+                time.sleep(0.1)
+                continue
+            _, buffer = cv2.imencode('.jpg', output_frame)
+            frame = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        time.sleep(0.066) 
+
+@app.route('/video')
+def video():
+    return Response(generar_stream(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+def iniciar_flask():
+    app.run(host='0.0.0.0', port=8081, threaded=True)
+
+threading.Thread(target=iniciar_flask, daemon=True).start()
 
 # MQTT
-# MQTT_BROKER = "127.0.0.1" # para localhost
+    #MQTT_BROKER = "127.0.0.1" # para localhost y probar camara
 MQTT_BROKER = "broker"
 MQTT_PORT = 1883
 MQTT_TOPIC = "babyguard/alertas/camara"
@@ -22,14 +50,14 @@ mqtt_client.loop_start()
 # MEDIAPIPE
 # Fuente para el stream del video y uso de camara de la esp (ahi ya toca poner el topico donde se haga stream del video)
 
-# video de pruebas locales
-FUENTE_VIDEO = "Media/Test/Videos/baby_4.mp4"
+    # video de pruebas locales
+FUENTE_VIDEO = "Media/Test/Videos/bb.mp4"
 
-# webcam local
-# FUENTE_VIDEO = 0  # /dev/video0
+    # webcam local
+#FUENTE_VIDEO = 0  # /dev/video0
 
-# stream desde la ESP32 Cam
-# FUENTE_VIDEO = "http://192.168.1.XXX:81/stream"  # <-- cambiar la IP por la de la ESP32
+    # stream desde la ESP32 Cam
+#FUENTE_VIDEO = "http://192.168.1.XXX:81/stream"   # ESP32 real
 # http://192.168.1.XXX/video — algunos firmwares alternativos
 
 mp_face_mesh = mp.solutions.face_mesh
@@ -39,10 +67,11 @@ mp_drawing_styles = mp.solutions.drawing_styles
 cap = cv2.VideoCapture(FUENTE_VIDEO)
 
 tiempo_sin_rostro = None
-segundos_limite = 1.5
+#segundos_limite = 1.5
+segundos_limite = 0.5  # <-- bajado temporalmente para testear
 
 print(f"Iniciando BabyGuard Pro - Face Mesh Monitor: {FUENTE_VIDEO}")
-print("Presiona 'ESC' en la ventana de video para salir")
+#print("Presiona 'ESC' en la ventana de video para salir")
 
 with mp_face_mesh.FaceMesh(
     max_num_faces=1,
@@ -52,13 +81,13 @@ with mp_face_mesh.FaceMesh(
     
     while True:
         success, image = cap.read()
-	original = image.copy()
-        
+
         if not success:
             print("-- (deteccion) Fin del video de prueba. Reiniciando bucle...")
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             continue
-
+        
+        original = image.copy()
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         resultados = face_mesh.process(image_rgb)
 
@@ -96,11 +125,10 @@ with mp_face_mesh.FaceMesh(
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
             if tiempo_transcurrido >= segundos_limite:
-            	nombre_foto = f"/app/alertas/alerta_mesh_{int(time.time())}.png"
-               	#nombre_foto = f"alerta_mesh_{int(time.time())}.png"
+                nombre_foto = f"/app/alertas/alerta_mesh_{int(time.time())}.png"
+                print(f"!! Intentando guardar: {nombre_foto}, shape: {image.shape}")
                 cv2.imwrite(nombre_foto, image)
                 print(f"!! (ALERTA) Foto guardada {nombre_foto}")
-                
                 # convertir la imagen a Base64
                 try:
                     with open(nombre_foto, "rb") as image_file:
@@ -123,9 +151,13 @@ with mp_face_mesh.FaceMesh(
 
         # cv2.imshow('BabyGuard Pro - Monitor', image)
         # cv2.imshow('BabyGuard Pro - Camara', original)
+        with lock:
+            output_frame = original.copy()
+
+        time.sleep(0.066)
 
         # if cv2.waitKey(30) & 0xFF == 27:
         #     break
 
 cap.release()
-cv2.destroyAllWindows()
+#cv2.destroyAllWindows()

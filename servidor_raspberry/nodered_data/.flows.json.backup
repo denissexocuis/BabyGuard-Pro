@@ -489,7 +489,7 @@
         "rh": 0,
         "inputs": 0,
         "x": 110,
-        "y": 180,
+        "y": 220,
         "wires": [
             [
                 "fdaf8d2f19afc55e"
@@ -505,12 +505,13 @@
         "action": "obj",
         "pretty": false,
         "x": 270,
-        "y": 180,
+        "y": 220,
         "wires": [
             [
                 "9d5c4850b477ef4f",
                 "a021c58bda674322",
-                "6d797d5804e9a2d8"
+                "6d797d5804e9a2d8",
+                "58af47133d53f68d"
             ]
         ]
     },
@@ -533,10 +534,11 @@
         "from": "",
         "to": "",
         "reg": false,
-        "x": 440,
+        "x": 520,
         "y": 180,
         "wires": [
             [
+                "d5f9ef1e749d4752",
                 "314eb9d6e98575d2"
             ]
         ]
@@ -560,11 +562,12 @@
         "from": "",
         "to": "",
         "reg": false,
-        "x": 450,
+        "x": 530,
         "y": 220,
         "wires": [
             [
-                "e7e383c929fec6b3"
+                "e7e383c929fec6b3",
+                "c9e4abcc3fb728a5"
             ]
         ]
     },
@@ -587,11 +590,12 @@
         "from": "",
         "to": "",
         "reg": false,
-        "x": 440,
+        "x": 520,
         "y": 260,
         "wires": [
             [
-                "dd731711bf56449d"
+                "dd731711bf56449d",
+                "3adf0920677e6df3"
             ]
         ]
     },
@@ -619,7 +623,7 @@
         "seg2": "30",
         "diff": false,
         "className": "",
-        "x": 730,
+        "x": 810,
         "y": 180,
         "wires": []
     },
@@ -647,7 +651,7 @@
         "seg2": "70",
         "diff": false,
         "className": "",
-        "x": 720,
+        "x": 800,
         "y": 220,
         "wires": []
     },
@@ -675,7 +679,7 @@
         "seg2": "80",
         "diff": false,
         "className": "",
-        "x": 730,
+        "x": 810,
         "y": 260,
         "wires": []
     },
@@ -701,27 +705,6 @@
         ]
     },
     {
-        "id": "5230865c43dc5262",
-        "type": "mqtt in",
-        "z": "cdfa6a64c8bdf5d5",
-        "name": "",
-        "topic": "babyguard/alertas/camara",
-        "qos": "2",
-        "datatype": "auto-detect",
-        "broker": "39299944dd91a122",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 130,
-        "y": 360,
-        "wires": [
-            [
-                "9dd8fea252e04bc9"
-            ]
-        ]
-    },
-    {
         "id": "9dd8fea252e04bc9",
         "type": "json",
         "z": "cdfa6a64c8bdf5d5",
@@ -729,11 +712,14 @@
         "property": "payload",
         "action": "",
         "pretty": false,
-        "x": 330,
-        "y": 360,
+        "x": 490,
+        "y": 460,
         "wires": [
             [
-                "ca8844ada4e7d36b"
+                "cee6a26d5ee07f54",
+                "57925c0287859589",
+                "455fbf422f4af95e",
+                "3981d641017ec50f"
             ]
         ]
     },
@@ -752,8 +738,8 @@
         "className": "",
         "topic": "",
         "name": "",
-        "x": 700,
-        "y": 360,
+        "x": 980,
+        "y": 540,
         "wires": []
     },
     {
@@ -772,12 +758,12 @@
         "bgcolor": "",
         "className": "",
         "icon": "",
-        "payload": "{\"action\": \"play\"}",
+        "payload": "{\"activar\": true}",
         "payloadType": "json",
         "topic": "topic",
         "topicType": "msg",
         "x": 140,
-        "y": 500,
+        "y": 580,
         "wires": [
             [
                 "9be44e096983b9a8"
@@ -789,7 +775,7 @@
         "type": "mqtt out",
         "z": "cdfa6a64c8bdf5d5",
         "name": "",
-        "topic": "babyguard/actuadores/musica",
+        "topic": "babyguard/cmd_buzzer",
         "qos": "",
         "retain": "",
         "respTopic": "",
@@ -798,8 +784,8 @@
         "correl": "",
         "expiry": "",
         "broker": "4807ca0dee43df38",
-        "x": 450,
-        "y": 500,
+        "x": 430,
+        "y": 580,
         "wires": []
     },
     {
@@ -811,14 +797,14 @@
         "order": 1,
         "width": 21,
         "height": 8,
-        "format": "<div style=\"text-align:center; width:100%; height:100%;\">\n    <img src=\"http://localhost:8081/stream\" style=\"width:100%; height:auto; border-radius:8px; border: 2px solid #B3E5FC; box-shadow: 0px 4px 8px rgba(0,0,0,0.1);\">\n</div>",
+        "format": "<div style=\"text-align:center; background:#fff8f0; padding:10px; border-radius:10px;\">\n    <!-- Video en vivo ESP32 (descomentar mañana) -->\n    <!-- <img src=\"http://192.168.1.XXX:81/stream\" width=\"100%\" style=\"border-radius:12px;\"/> -->\n\n    <img src=\"http://localhost:8081/video\" width=\"50%\" style=\"border-radius:12px;\"/>\n</div>",
         "storeOutMessages": true,
         "fwdInMessages": true,
         "resendOnRefresh": true,
         "templateScope": "local",
         "className": "",
-        "x": 320,
-        "y": 80,
+        "x": 1160,
+        "y": 460,
         "wires": [
             []
         ]
@@ -829,26 +815,28 @@
         "z": "cdfa6a64c8bdf5d5",
         "mydb": "ad233bcd952763f1",
         "name": "Database_BabyGuard",
-        "x": 820,
-        "y": 620,
+        "x": 720,
+        "y": 140,
         "wires": [
-            []
+            [
+                "2545adad69997dde"
+            ]
         ]
     },
     {
         "id": "58af47133d53f68d",
         "type": "function",
         "z": "cdfa6a64c8bdf5d5",
-        "name": "function 1",
-        "func": "msg.topic = 'INSERT INTO sensor_logs (temp, humedad, ruido, ts) values (?, ?, ?, NOW());';\n\nlet temp = msg.payload.temp;\nlet hum = msg.payload.humedad;\nlet ruido = msg.payload.ruido;\n\nmsg.payload = [temp, hum, ruido];\n\nreturn msg;",
+        "name": "INSERT INTO",
+        "func": "// insertar con hora de méxico\nmsg.topic = 'INSERT INTO sensor_logs (temp, humedad, ruido, ts) values (?, ?, ?, CONVERT_TZ(NOW(), \"+00:00\", \"-06:00\"));';\n\n// extraer las variables usando el nuevo objeto parseado\nlet temp = msg.payload.temp;\nlet hum = msg.payload.humedad;\nlet ruido = msg.payload.ruido;\n\n// pasar el arreglo de parámetros limpios al nodo de MySQL\nmsg.payload = [temp, hum, ruido];\n\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 580,
-        "y": 620,
+        "x": 520,
+        "y": 140,
         "wires": [
             [
                 "07d143bdd521458b"
@@ -862,27 +850,17 @@
         "name": "MQTT IN -> Sensores de la ESP32 a dashboard",
         "info": "",
         "x": 200,
-        "y": 140,
+        "y": 180,
         "wires": []
     },
     {
         "id": "39ac7db58d9d0387",
         "type": "comment",
         "z": "cdfa6a64c8bdf5d5",
-        "name": "Conf del Dashboard con HTML y JavaScript. ",
+        "name": "Cambiar favicon con html",
         "info": "",
-        "x": 190,
+        "x": 130,
         "y": 40,
-        "wires": []
-    },
-    {
-        "id": "e48b55f458a6951a",
-        "type": "comment",
-        "z": "cdfa6a64c8bdf5d5",
-        "name": "MQTT IN -> Alerta del ESP32 a dashboard",
-        "info": "",
-        "x": 180,
-        "y": 320,
         "wires": []
     },
     {
@@ -892,45 +870,8 @@
         "name": "MQTT OUT | Botón -> Activar canción de cuna desde el dashboard",
         "info": "",
         "x": 260,
-        "y": 460,
+        "y": 540,
         "wires": []
-    },
-    {
-        "id": "3d65db9efd8d43aa",
-        "type": "mqtt in",
-        "z": "cdfa6a64c8bdf5d5",
-        "name": "",
-        "topic": "babyguard/alertas/camara",
-        "qos": "2",
-        "datatype": "auto-detect",
-        "broker": "39299944dd91a122",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 130,
-        "y": 620,
-        "wires": [
-            [
-                "8af1f482b62fe5ec"
-            ]
-        ]
-    },
-    {
-        "id": "8af1f482b62fe5ec",
-        "type": "json",
-        "z": "cdfa6a64c8bdf5d5",
-        "name": "",
-        "property": "payload",
-        "action": "",
-        "pretty": false,
-        "x": 330,
-        "y": 620,
-        "wires": [
-            [
-                "58af47133d53f68d"
-            ]
-        ]
     },
     {
         "id": "74f55cf40925826e",
@@ -938,8 +879,8 @@
         "z": "cdfa6a64c8bdf5d5",
         "name": "MQTT IN -> Mandar logs a base de datos",
         "info": "",
-        "x": 180,
-        "y": 580,
+        "x": 600,
+        "y": 60,
         "wires": []
     },
     {
@@ -948,8 +889,8 @@
         "z": "cdfa6a64c8bdf5d5",
         "name": "en function meter el query de \"insert into\"",
         "info": "",
-        "x": 620,
-        "y": 660,
+        "x": 640,
+        "y": 100,
         "wires": []
     },
     {
@@ -960,8 +901,8 @@
         "bot": "c720f7f694f4d5cc",
         "haserroroutput": false,
         "outputs": 1,
-        "x": 700,
-        "y": 400,
+        "x": 1020,
+        "y": 360,
         "wires": [
             [
                 "cf875abe48314e5b"
@@ -980,27 +921,193 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 940,
+        "x": 1200,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "2545adad69997dde",
+        "type": "debug",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "debug 3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 900,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "de255a08bddad1a0",
+        "type": "mqtt in",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "",
+        "topic": "babyguard/alertas/camara",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "39299944dd91a122",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 130,
+        "y": 440,
+        "wires": [
+            [
+                "9dd8fea252e04bc9"
+            ]
+        ]
+    },
+    {
+        "id": "73f87c0b7fa010f5",
+        "type": "comment",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "MQTT IN -> Transmitir video al dashboard y mandar alertas a Telegram",
+        "info": "",
+        "x": 270,
         "y": 400,
         "wires": []
     },
     {
-        "id": "ca8844ada4e7d36b",
+        "id": "cee6a26d5ee07f54",
         "type": "function",
         "z": "cdfa6a64c8bdf5d5",
-        "name": "function 2",
-        "func": "msg.payload.type = \"message\";\nreturn msg;",
+        "name": "mandar imagen a template",
+        "func": "msg.payload = msg.payload.imagen_base64;\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 500,
+        "x": 840,
+        "y": 500,
+        "wires": [
+            [
+                "b9dd521763f90c4f"
+            ]
+        ]
+    },
+    {
+        "id": "d5f9ef1e749d4752",
+        "type": "function",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "status temp",
+        "func": "let temp = msg.payload;\n\nif (temp < 20) {\n    msg.payload = {\n        \"chatId\": env.get(\"TELEGRAM_CHAT_ID\"),\n        \"type\": \"message\",\n        \"content\": `🔵 Temperatura baja en la cuna: ${temp}°C. El bebé puede tener frío.`\n    };\n    return msg;\n} else if (temp > 30) {\n    msg.payload = {\n        \"chatId\": env.get(\"TELEGRAM_CHAT_ID\"),\n        \"type\": \"message\",\n        \"content\": temp > 35\n            ? `🔴 ALERTA: Temperatura muy alta: ${temp}°C. ¡Revisa al bebé!`\n            : `🟡 Temperatura elevada en la cuna: ${temp}°C. Ventila el cuarto.`\n    };\n    return msg;\n}\nreturn null; // entre 20-30 todo bien",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 320,
+        "wires": [
+            [
+                "8688761a73b54808"
+            ]
+        ]
+    },
+    {
+        "id": "c9e4abcc3fb728a5",
+        "type": "function",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "status hum",
+        "func": "let hum = msg.payload;\n\nif (hum < 40) {\n    msg.payload = {\n        \"chatId\": env.get(\"TELEGRAM_CHAT_ID\"),\n        \"type\": \"message\",\n        \"content\": `🟡 Humedad baja: ${hum}%. El ambiente está muy seco para el bebé.`\n    };\n    return msg;\n} else if (hum > 70) {\n    msg.payload = {\n        \"chatId\": env.get(\"TELEGRAM_CHAT_ID\"),\n        \"type\": \"message\",\n        \"content\": `🟡 Humedad alta: ${hum}%. El cuarto está muy húmedo.`\n    };\n    return msg;\n}\nreturn null; // entre 40-70 todo bien",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
         "y": 360,
         "wires": [
             [
-                "79b3da2a322e1729",
+                "8688761a73b54808"
+            ]
+        ]
+    },
+    {
+        "id": "3adf0920677e6df3",
+        "type": "function",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "status ruido",
+        "func": "let ruido = msg.payload;\n\nif (ruido > 80) {\n    msg.payload = {\n        \"chatId\": env.get(\"TELEGRAM_CHAT_ID\"),\n        \"type\": \"message\",\n        \"content\": `🔴 ALERTA: Ruido muy alto: ${ruido}dB. ¡El bebé probablemente está llorando fuerte!`\n    };\n    return msg;\n} else if (ruido > 50) {\n    msg.payload = {\n        \"chatId\": env.get(\"TELEGRAM_CHAT_ID\"),\n        \"type\": \"message\",\n        \"content\": `🟡 Ruido elevado: ${ruido}dB. Puede que el bebé esté inquieto.`\n    };\n    return msg;\n}\nreturn null; // 50dB o menos todo bien",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 400,
+        "wires": [
+            [
+                "8688761a73b54808"
+            ]
+        ]
+    },
+    {
+        "id": "57925c0287859589",
+        "type": "function",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "bebé no detectado",
+        "func": "let ahora = Date.now();\nlet ultimaAlerta = context.get(\"ultimaAlerta\") || 0;\n\nif (ahora - ultimaAlerta < 60000) return null;\n\ncontext.set(\"ultimaAlerta\", ahora);\nmsg.payload = {\n    \"chatId\": env.get(\"TELEGRAM_CHAT_ID\"),\n    \"type\": \"message\",\n    \"content\": \"🚨 ALERTA: Revisa la cámara inmediatamente.\"\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 810,
+        "y": 460,
+        "wires": [
+            [
+                "8688761a73b54808"
+            ]
+        ]
+    },
+    {
+        "id": "455fbf422f4af95e",
+        "type": "function",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "alerta seguridad",
+        "func": "// texto de la alerta como el mensaje principal (payload)\nmsg.payload = msg.payload.mensaje;\n\n// cambiar el título de la caja negra (topic) por algo más estético\nmsg.topic = \"⚠️ ALERTA DE SEGURIDAD\";\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 780,
+        "y": 540,
+        "wires": [
+            [
+                "79b3da2a322e1729"
+            ]
+        ]
+    },
+    {
+        "id": "3981d641017ec50f",
+        "type": "function",
+        "z": "cdfa6a64c8bdf5d5",
+        "name": "Foto Alerta Telegram",
+        "func": "// 1. Forzamos a Node-RED a convertir el mensaje en un objeto real\nlet data = msg.payload;\nif (typeof data === 'string') {\n    try {\n        data = JSON.parse(data);\n    } catch (e) {\n        return null; // Si no es un JSON válido, ignora el mensaje\n    }\n}\n\n// 2. Evaluamos de forma segura que contenga la foto de la cámara\nif (data && data.imagen_base64) {\n    var textoAlerta = data.mensaje || \"¡Bebé fuera de la cuna!\";\n    var stringBase64 = data.imagen_base64;\n\n    // 3. Convertimos el Base64 a Buffer binario para Telegram\n    var imagenBinaria = Buffer.from(stringBase64, 'base64');\n\n    // 4. Estructuramos el mensaje final para el Bot\n    msg.payload = {\n        chatId: env.get(\"TELEGRAM_CHAT_ID\"),\n        type: \"photo\",\n        content: imagenBinaria,\n        caption: \"⚠️ ¡ALERTA CRÍTICA! \" + textoAlerta\n    };\n\n    return msg;\n}\n\n// Si el mensaje viene de los sensores de temperatura, lo ignora y no truena\nreturn null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 800,
+        "y": 580,
+        "wires": [
+            [
                 "8688761a73b54808"
             ]
         ]

@@ -19,7 +19,8 @@ RUN mkdir -p /app/alertas
 RUN pip install --no-cache-dir \
     opencv-python-headless \
     mediapipe==0.10.14 \
-    paho-mqtt
+    paho-mqtt \
+    flask
 
 # copiar todo el código de la IA dentro del contenedor
 COPY . .

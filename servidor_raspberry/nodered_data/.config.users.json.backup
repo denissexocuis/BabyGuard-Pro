@@ -18,7 +18,8 @@
             },
             "dialog": {
                 "export": {
-                    "pretty": true
+                    "pretty": true,
+                    "json-view": false
                 }
             }
         }
