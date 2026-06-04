@@ -9,6 +9,8 @@ import json
 import paho.mqtt.client as mqtt
 import math
 import threading
+import os
+import glob
 from flask import Flask, Response
 
 # FLASK - servidor de stream
@@ -255,5 +257,12 @@ with mp_holistic.Holistic(
             except Exception as e:
                 print(f"!! (ENVIO) Error enviando la alerta MQTT: {e}")
             
+            # Borrar fotos viejas, guardar solo las últimas 20
+            fotos = glob.glob('/app/alertas/alerta_mesh_*.png')
+            fotos.sort()
+            if len(fotos) > 20:
+                for foto_vieja in fotos[:-20]:
+                    os.remove(foto_vieja)
+
             if "detectado" not in mensaje_alerta:
                 tiempo_mala_postura = time.time() # Reset de seguridad
