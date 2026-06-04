@@ -79,7 +79,7 @@ segundos_limite = 1.5
 print(f"Iniciando BabyGuard Pro - Face Mesh Monitor: {FUENTE_VIDEO}")
 #print("Presiona 'ESC' en la ventana de video para salir")
 
-framerate = 20 # configuracion virtual de framerate
+framerate = 100 # configuracion virtual de framerate
 frames_a_skippear = 1 # configuracion de cuantos frames quiero saltar
 # por ejemplo frames_a_skippear = 1, proceso 1 salto 1 proceso 1 salto 1 - procesamiento vs real 1/2=50%
 # por ejemplo frames_a_skippear = 2, proceso 1 salto 2 proceso 1 salto 2 - procesamiento 1/3=33%
