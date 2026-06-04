@@ -1,3 +1,6 @@
+import os
+os.environ["DISPLAY"] = ""
+
 import cv2
 import mediapipe as mp
 import time
@@ -5,6 +8,39 @@ import base64
 import json
 import paho.mqtt.client as mqtt
 import math
+import threading
+from flask import Flask, Response
+
+# FLASK - servidor de stream
+app = Flask(__name__)
+output_frame = None
+lock = threading.Lock()
+ 
+def generate_stream():
+    global output_frame
+    while True:
+        with lock:
+            if output_frame is None:
+                continue
+            ret, buffer = cv2.imencode('.jpg', output_frame)
+            if not ret:
+                continue
+            frame = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+ 
+@app.route('/video')
+def video():
+    return Response(generate_stream(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+ 
+def run_flask():
+    app.run(host='0.0.0.0', port=8081, threaded=True)
+ 
+# Iniciar Flask en un hilo separado
+flask_thread = threading.Thread(target=run_flask)
+flask_thread.daemon = True
+flask_thread.start()
 
 # MQTT
 #MQTT_BROKER = "127.0.0.1" # para localhost
@@ -39,7 +75,7 @@ cooldown_alertas = 5
 segundos_limite = 1.5
 
 print(f"Iniciando BabyGuard Pro - Face Mesh Monitor: {FUENTE_VIDEO}")
-print("Presiona 'ESC' en la ventana de video para salir")
+#print("Presiona 'ESC' en la ventana de video para salir")
 
 framerate = 20 # configuracion virtual de framerate
 frames_a_skippear = 1 # configuracion de cuantos frames quiero saltar
@@ -69,10 +105,8 @@ with mp_holistic.Holistic(
         # contador para skipeo de frames para evitar el sobreprocesamiento en la Rasp
         contador += 1
         if contador < frames_a_skippear:
-            cv2.imshow('BabyGuard Pro - Camara', original)
-            cv2.imshow('BabyGuard Pro - Face Mesh', image_mesh)
-            cv2.imshow('BabyGuard Pro - Postura', image_pose)
-            if cv2.waitKey(1) & 0xFF == 27: break
+            with lock:
+                output_frame = original.copy()
             continue
 
         contador = 0
@@ -195,6 +229,11 @@ with mp_holistic.Holistic(
             else:
                 tiempo_mala_postura = None
 
+
+        # Actualizar frame para el stream Flask
+        with lock:
+            output_frame = image_mesh.copy()
+
         # ENVIO A MQTT
         if alerta_critica:
             nombre_foto = f"alerta_mesh_{int(time.time())}.png"
@@ -218,13 +257,3 @@ with mp_holistic.Holistic(
             
             if "detectado" not in mensaje_alerta:
                 tiempo_mala_postura = time.time() # Reset de seguridad
-
-        cv2.imshow('BabyGuard Pro - Camara', original)
-        cv2.imshow('BabyGuard Pro - Face Mesh', image_mesh)
-        cv2.imshow('BabyGuard Pro - Postura', image_pose)
-
-        if cv2.waitKey(30) & 0xFF == 27:
-            break
-
-cap.release()
-cv2.destroyAllWindows()
