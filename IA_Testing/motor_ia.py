@@ -35,6 +35,15 @@ segundos_limite = 1.5
 print(f"Iniciando BabyGuard Pro - Face Mesh Monitor: {FUENTE_VIDEO}")
 print("Presiona 'ESC' en la ventana de video para salir")
 
+framerate = 20 # configuracion virtual de framerate
+frames_a_skippear = 1 # configuracion de cuantos frames quiero saltar
+# por ejemplo frames_a_skippear = 1, proceso 1 salto 1 proceso 1 salto 1 - procesamiento vs real 1/2=50%
+# por ejemplo frames_a_skippear = 2, proceso 1 salto 2 proceso 1 salto 2 - procesamiento 1/3=33%
+# por ejemplo frames_a_skippear = 3, proceso 1 salto 3 proceso 1 salto 3 - procesamiento 1/4=25%
+
+delay = 1 / float(framerate)
+contador = 0
+
 with mp_face_mesh.FaceMesh(
     max_num_faces=1,
     refine_landmarks=True,
@@ -43,18 +52,24 @@ with mp_face_mesh.FaceMesh(
     
     while True:
         success, image = cap.read()
-        scs, original = cap.read()
         
         if not success:
             print("-- (deteccion) Fin del video de prueba. Reiniciando bucle...")
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             continue
 
+        if contador != 0:
+            contador -= 1
+            time.sleep(delay)
+            continue
+
+        original = image.copy()
+
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         resultados = face_mesh.process(image_rgb)
 
         if resultados.multi_face_landmarks:
-            tiempo_sin_rostro = None  
+            tiempo_sin_rostro = None
             
             for face_landmarks in resultados.multi_face_landmarks:
                 # dibujo de tesselado de rostro (los triangulos de la cara)
