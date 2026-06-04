@@ -22,14 +22,16 @@ mqtt_client.loop_start()
 # MEDIAPIPE
 # Fuente para el stream del video y uso de camara de la esp (ahi ya toca poner el topico donde se haga stream del video)
 FUENTE_VIDEO = "Media/Test/Videos/baby_4.mp4"
+# FUENTE_VIDEO = 0
 
-mp_face_mesh = mp.solutions.face_mesh
+mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 
 cap = cv2.VideoCapture(FUENTE_VIDEO)
 
 tiempo_sin_rostro = None
+tiempo_mala_postura = None
 segundos_limite = 1.5
 
 print(f"Iniciando BabyGuard Pro - Face Mesh Monitor: {FUENTE_VIDEO}")
@@ -44,11 +46,9 @@ frames_a_skippear = 1 # configuracion de cuantos frames quiero saltar
 delay = 1 / float(framerate)
 contador = 0
 
-with mp_face_mesh.FaceMesh(
-    max_num_faces=1,
-    refine_landmarks=True,
+with mp_holistic.Holistic(
     min_detection_confidence=0.5,
-    min_tracking_confidence=0.5) as face_mesh:
+    min_tracking_confidence=0.5) as holistic_model:
     
     while True:
         success, image = cap.read()
@@ -58,36 +58,51 @@ with mp_face_mesh.FaceMesh(
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             continue
 
-        if contador != 0:
-            contador -= 1
-            time.sleep(delay)
+        original = image.copy()
+        image_mesh = image.copy()
+        image_pose = image.copy()
+
+        # contador para skipeo de frames para evitar el sobreprocesamiento en la Rasp
+        contador += 1
+        if contador < frames_a_skippear:
+            cv2.imshow('BabyGuard Pro - Camara', original)
+            cv2.imshow('BabyGuard Pro - Face Mesh', image_mesh)
+            cv2.imshow('BabyGuard Pro - Postura', image_pose)
+            if cv2.waitKey(1) & 0xFF == 27: break
             continue
 
-        original = image.copy()
+        contador = 0
 
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        resultados = face_mesh.process(image_rgb)
+        resultados = holistic_model.process(image_rgb)
 
-        if resultados.multi_face_landmarks:
+        # flags de estado del bebe
+        bebe_presente = False
+        alerta_critica = False
+        mensaje_alerta = ""
+
+        if resultados.face_landmarks:
+            bebe_presente = True
             tiempo_sin_rostro = None
             
-            for face_landmarks in resultados.multi_face_landmarks:
-                # dibujo de tesselado de rostro (los triangulos de la cara)
-                mp_drawing.draw_landmarks(
-                    image=image,
-                    landmark_list=face_landmarks,
-                    connections=mp_face_mesh.FACEMESH_TESSELATION,
-                    landmark_drawing_spec=None,
-                    connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style())
-                
-                # dibujar contornos (ojos, cejas, labios y cara)
-                mp_drawing.draw_landmarks(
-                    image=image,
-                    landmark_list=face_landmarks,
-                    connections=mp_face_mesh.FACEMESH_CONTOURS,
-                    landmark_drawing_spec=None,
-                    connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style())
-            print("// (log) Bebé en pantalla.")
+            # dibujo de tesselado de rostro (los triangulos de la cara)
+            mp_drawing.draw_landmarks(
+                image=image_mesh,
+                landmark_list=resultados.face_landmarks,
+                connections=mp_holistic.FACEMESH_TESSELATION,
+                landmark_drawing_spec=None,
+                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style())
+            
+            # dibujar contornos (ojos, cejas, labios y cara)
+            mp_drawing.draw_landmarks(
+                image=image_mesh,
+                landmark_list=resultados.face_landmarks,
+                connections=mp_holistic.FACEMESH_CONTOURS,
+                landmark_drawing_spec=None,
+                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style())
+            
+            cv2.putText(image_mesh, "Bebe Detectado", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            print("// (log) Bebe en pantalla.")
         else:
             # ALERTAS DE QUE NO HAY BEBE EN LA IMAGEN
 
@@ -95,42 +110,96 @@ with mp_face_mesh.FaceMesh(
                 tiempo_sin_rostro = time.time()
             
             tiempo_transcurrido = time.time() - tiempo_sin_rostro
-            print(f"!! (ALERTA) Sin bebé detectado por {tiempo_transcurrido} segundos.")
-            tiempo_restante = max(0, int(segundos_limite - tiempo_transcurrido) + 1)
+            print(f"!! (ALERTA) Sin bebe detectado por {round(tiempo_transcurrido,3)} segundos.")
+            tiempo_restante = max(0, round(segundos_limite - tiempo_transcurrido + 1, 2))
             
             cv2.putText(image, f"Sin bebe... Foto en: {tiempo_restante}s", (20, 40), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
             if tiempo_transcurrido >= segundos_limite:
-                nombre_foto = f"alerta_mesh_{int(time.time())}.png"
-                cv2.imwrite(nombre_foto, image)
-                print(f"!! (ALERTA) Foto guardada {nombre_foto}")
-                
-                # convertir la imagen a Base64
-                try:
-                    with open(nombre_foto, "rb") as image_file:
-                        encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-                    
-                    # empaquetar en un payload
-                    payload = {
-                        "alerta": "CRITICA",
-                        "mensaje": "¡Bebé no detectado en la cuna!",
-                        "imagen_base64": encoded_string
-                    }
-                    
-                    # disparar al docker
-                    mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
-                    print("// (ENVIO) Alerta e imagen inyectadas exitosamente al servidor MQTT.")
-                except Exception as e:
-                    print(f"!! (ENVIO) Error enviando la alerta MQTT: {e}")
-
+                alerta_critica = True
+                mensaje_alerta = "Bebe no detectado en la cuna..."
                 tiempo_sin_rostro = time.time()
 
-        # cv2.imshow('BabyGuard Pro - Monitor', image)
-        # cv2.imshow('BabyGuard Pro - Camara', original)
+        # POSTURA DEL BEBE
+        if resultados.pose_landmarks and bebe_presente:
+            landmarks = resultados.pose_landmarks.landmark
+            
+            nariz = landmarks[mp_holistic.PoseLandmark.NOSE.value]
+            hombro_izq = landmarks[mp_holistic.PoseLandmark.LEFT_SHOULDER.value]
+            hombro_der = landmarks[mp_holistic.PoseLandmark.RIGHT_SHOULDER.value]
 
-        # if cv2.waitKey(30) & 0xFF == 27:
-        #     break
+            # Dibujo de esqueleto en la imagen de postura
+            mp_drawing.draw_landmarks(
+                image_pose, 
+                resultados.pose_landmarks, 
+                mp_holistic.POSE_CONNECTIONS,
+                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
+
+            estado_postura = "Postura: Segura"
+            color_postura = (0, 255, 0) # Verde
+
+            # se calcula la distancia entre los hombros para ver si esta parado
+            # la camara se encuentra justo encima de la cuna,
+            # asi que se calcula la distancia de hombro a hombro para calcular cercania
+            distancia_hombros = abs(hombro_izq.x - hombro_der.x)
+            limite_cercania = 0.30 # cerca del 30% del ancho de la camara
+            
+            if distancia_hombros > limite_cercania:
+                estado_postura = "¡PELIGRO: Trepando!"
+                color_postura = (0, 0, 255) # Rojo
+                alerta_critica = True
+                mensaje_alerta = "¡Bebe de pie o peligrosamente cerca de la cámara!"
+
+            # buena visibilidad de hombros (espalda) pero nada de visibilidad en la nariz
+            elif (hombro_izq.visibility > 0.6 and hombro_der.visibility > 0.6) and nariz.visibility < 0.2:
+                estado_postura = "¡PELIGRO: Boca abajo!"
+                color_postura = (0, 0, 255)
+                alerta_critica = True
+                mensaje_alerta = "¡Bebe posicionado boca abajo!"
+
+            cv2.putText(image_pose, estado_postura, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color_postura, 2)
+            
+            # temporizador para posturas peligrosas
+            if alerta_critica and "PELIGRO" in estado_postura:
+                if tiempo_mala_postura is None:
+                    tiempo_mala_postura = time.time()
+                
+                if time.time() - tiempo_mala_postura < segundos_limite:
+                    alerta_critica = False # reset mientras no se termine el tiempo
+            else:
+                tiempo_mala_postura = None
+
+        # ENVIO A MQTT
+        if alerta_critica:
+            nombre_foto = f"alerta_mesh_{int(time.time())}.png"
+            cv2.imwrite(nombre_foto, original) # Mandamos la foto limpia al dashboard
+            print(f"!! (ALERTA) {mensaje_alerta}")
+            
+            try:
+                with open(nombre_foto, "rb") as image_file:
+                    encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                
+                payload = {
+                    "alerta": "CRITICA",
+                    "mensaje": mensaje_alerta,
+                    "imagen_base64": encoded_string
+                }
+                
+                mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
+                print(f"// (ENVIO) Payload MQTT listo para: {mensaje_alerta}")
+            except Exception as e:
+                print(f"!! (ENVIO) Error enviando la alerta MQTT: {e}")
+            
+            if "detectado" not in mensaje_alerta:
+                tiempo_mala_postura = time.time() # Reset de seguridad
+
+        cv2.imshow('BabyGuard Pro - Camara', original)
+        cv2.imshow('BabyGuard Pro - Face Mesh', image_mesh)
+        cv2.imshow('BabyGuard Pro - Postura', image_pose)
+
+        if cv2.waitKey(30) & 0xFF == 27:
+            break
 
 cap.release()
 cv2.destroyAllWindows()
