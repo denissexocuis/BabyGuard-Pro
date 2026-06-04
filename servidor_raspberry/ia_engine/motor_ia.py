@@ -51,13 +51,13 @@ mqtt_client.loop_start()
 # Fuente para el stream del video y uso de camara de la esp (ahi ya toca poner el topico donde se haga stream del video)
 
     # video de pruebas locales
-FUENTE_VIDEO = "Media/Test/Videos/bb.mp4"
+#FUENTE_VIDEO = "Media/Test/Videos/bb.mp4"
 
     # webcam local
-#FUENTE_VIDEO = 0  # /dev/video0
+FUENTE_VIDEO = 0  # /dev/video0
 
     # stream desde la ESP32 Cam
-#FUENTE_VIDEO = "http://192.168.1.XXX:81/stream"   # ESP32 real
+#FUENTE_VIDEO = "http://192.168.100.18:81/stream"   # ESP32 real
 # http://192.168.1.XXX/video — algunos firmwares alternativos
 
 mp_face_mesh = mp.solutions.face_mesh
