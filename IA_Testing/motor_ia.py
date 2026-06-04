@@ -4,25 +4,24 @@ import time
 import base64
 import json
 import paho.mqtt.client as mqtt
-
-
+import math
 
 # MQTT
 # MQTT_BROKER = "127.0.0.1" # para localhost
-MQTT_BROKER = "broker"
-MQTT_PORT = 1883
-MQTT_TOPIC = "babyguard/alertas/camara"
+# MQTT_BROKER = "broker"
+# MQTT_PORT = 1883
+# MQTT_TOPIC = "babyguard/alertas/camara"
 
 print("Conectando al Broker MQTT local de BabyGuard...")
-mqtt_client = mqtt.Client()
-mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
-mqtt_client.loop_start()
+# mqtt_client = mqtt.Client()
+# mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+# mqtt_client.loop_start()
 
 
 # MEDIAPIPE
 # Fuente para el stream del video y uso de camara de la esp (ahi ya toca poner el topico donde se haga stream del video)
-FUENTE_VIDEO = "Media/Test/Videos/baby_4.mp4"
-# FUENTE_VIDEO = 0
+# FUENTE_VIDEO = "Media/Test/Videos/baby_4.mp4"
+FUENTE_VIDEO = 1
 
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
@@ -30,8 +29,13 @@ mp_drawing_styles = mp.solutions.drawing_styles
 
 cap = cv2.VideoCapture(FUENTE_VIDEO)
 
+def calcular_distancia(p1, p2):
+    return math.hypot(p2.x - p1.x, p2.y - p1.y)
+
 tiempo_sin_rostro = None
 tiempo_mala_postura = None
+tiempo_ultima_alerta = 0
+cooldown_alertas = 5
 segundos_limite = 1.5
 
 print(f"Iniciando BabyGuard Pro - Face Mesh Monitor: {FUENTE_VIDEO}")
@@ -84,6 +88,27 @@ with mp_holistic.Holistic(
         if resultados.face_landmarks:
             bebe_presente = True
             tiempo_sin_rostro = None
+
+            face_landmarks = resultados.face_landmarks
+
+            labio_sup = face_landmarks.landmark[13]
+            labio_inf = face_landmarks.landmark[14]
+            comisura_izq = face_landmarks.landmark[78]
+            comisura_der = face_landmarks.landmark[308]
+            
+            apertura_boca = calcular_distancia(labio_sup, labio_inf)
+            ancho_boca = calcular_distancia(comisura_izq, comisura_der)
+            
+            if ancho_boca > 0:
+                ratio_boca = apertura_boca / ancho_boca
+                
+                if ratio_boca > 0.6:
+                    print("// (log) Bebe en llanto")
+                    tiempo_actual = time.time()
+                    if tiempo_actual - tiempo_ultima_alerta > cooldown_alertas:
+                        alerta_critica = True
+                        mensaje_alerta = "¡Bebe de pie o peligrosamente cerca de la cámara!"
+                        tiempo_ultima_alerta = tiempo_actual
             
             # dibujo de tesselado de rostro (los triangulos de la cara)
             mp_drawing.draw_landmarks(
