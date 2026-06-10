@@ -159,7 +159,7 @@ FUENTE_VIDEO = 0
 cap_local = cv2.VideoCapture(FUENTE_VIDEO)
 
 # URL de la ESP32 (Asegúrate de que la IP sea la correcta al conectar)
-URL_ESP32 = "http://10.220.244.165:81/upload"
+URL_ESP32 = "http://10.220.244.165:81/stream"
 cap_pc = cv2.VideoCapture(URL_ESP32)
 
 mp_holistic = mp.solutions.holistic
