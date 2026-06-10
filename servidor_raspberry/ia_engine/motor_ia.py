@@ -12,12 +12,12 @@ import threading
 import glob
 from flask import Flask, Response
 
-# ---> NUEVAS LIBRERÍAS PARA EL AUDIO <---
+# ---> LIBRERÍAS PARA EL AUDIO <---
 import pyaudio
 import struct
 
 # ==========================================
-# 1. FLASK - servidor de stream
+# 1. FLASK - SERVIDOR DE STREAM DUAL
 # ==========================================
 app = Flask(__name__)
 
@@ -66,12 +66,12 @@ flask_thread.daemon = True
 flask_thread.start()
 
 # ==========================================
-# 2. MQTT
+# 2. CONFIGURACIÓN MQTT
 # ==========================================
 MQTT_BROKER = "broker"
 MQTT_PORT = 1883
 MQTT_TOPIC_CAMARA = "babyguard/alertas/camara"
-MQTT_TOPIC_AUDIO = "babyguard/alertas/audio" # <-- Nuevo tópico para separar el llanto real del visual
+MQTT_TOPIC_AUDIO = "babyguard/alertas/audio"
 
 print("Conectando al Broker MQTT local de BabyGuard...")
 mqtt_client = mqtt.Client()
@@ -92,14 +92,14 @@ def motor_de_audio():
     p = pyaudio.PyAudio()
     
     try:
-        # RECUERDA: Ajustar input_device_index=1 con el ID real de tu adaptador USB
+        # IMPORTANTE: Ajustar input_device_index con el ID real de tu adaptador USB en la Raspberry
         stream = p.open(format=FORMAT,
                         channels=CHANNELS,
                         rate=RATE,
                         input=True,
                         frames_per_buffer=CHUNK,
                         input_device_index=1) 
-        print("🎙️ Motor de audio (Micrófono USB) iniciado en segundo plano...")
+        print("🎙️ Motor de audio iniciado en segundo plano...")
     except Exception as e:
         print(f"⚠️ Error grave al abrir el micrófono: {e}")
         return
@@ -126,7 +126,6 @@ def motor_de_audio():
                         mensaje = f"¡Llanto ruidoso detectado! ({db_calibrado:.2f} dB)"
                         print(f"🚨 (AUDIO) {mensaje}")
                         
-                        # Creamos un payload JSON igual que el de video pero sin la imagen
                         payload = {
                             "alerta": "CRITICA_AUDIO",
                             "mensaje": mensaje,
@@ -147,21 +146,19 @@ audio_thread = threading.Thread(target=motor_de_audio)
 audio_thread.daemon = True
 audio_thread.start()
 
-
 # ==========================================
-# 4. MEDIAPIPE Y MOTOR DE VIDEO (HILO PRINCIPAL)
+# 4. CONFIGURACIÓN DE CÁMARAS Y MEDIAPIPE
 # ==========================================
-FUENTE_VIDEO = 0
-URL_ESP32 = "http://10.97.203.75:81/stream"
+FUENTE_VIDEO = 0 
+cap_local = cv2.VideoCapture(FUENTE_VIDEO)
 
+# URL de la ESP32 (Asegúrate de que la IP sea la correcta al conectar)
+URL_ESP32 = "http://10.220.244.165:81/upload"
 cap_pc = cv2.VideoCapture(URL_ESP32)
 
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
-
-# ¡CORRECCIÓN DE BUG! Renombrado cap a cap_local para que coincida con tu ciclo while
-cap_local = cv2.VideoCapture(FUENTE_VIDEO)
 
 def calcular_distancia(p1, p2):
     return math.hypot(p2.x - p1.x, p2.y - p1.y)
@@ -173,15 +170,16 @@ tiempo_ultima_alerta = 0
 cooldown_alertas = 5
 segundos_limite = 1.5
 
-print(f"👁️ Iniciando BabyGuard Pro - Monitor Dual (Día/Noche) en: {FUENTE_VIDEO}")
-
 framerate = 100 
 frames_a_skippear = 1 
-
-delay = 1 / float(framerate)
 contador = 0
 turno_camara_local = True
 
+print("👁️ Iniciando BabyGuard Pro - Monitor Dual (Día/Noche) y Audio")
+
+# ==========================================
+# 5. BUCLE PRINCIPAL DE IA (VIDEO)
+# ==========================================
 with mp_holistic.Holistic(
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5) as holistic_model:
@@ -198,6 +196,7 @@ with mp_holistic.Holistic(
             continue
         contador = 0
 
+        # === INTERCALADOR DE CÁMARAS ===
         turno_camara_local = not turno_camara_local
         
         if turno_camara_local and success_local:
@@ -213,6 +212,7 @@ with mp_holistic.Holistic(
             else:
                 image = frame_pc.copy()
                 origen_camara = "Camara IR"
+        # ===============================
 
         original = image.copy()
         image_mesh = image.copy()
@@ -225,7 +225,7 @@ with mp_holistic.Holistic(
         alerta_critica = False
         mensaje_alerta = ""
 
-        # --- A) EVALUACIÓN DE ROSTRO ---
+        # --- A) EVALUACIÓN DE ROSTRO Y LLANTO VISUAL ---
         if resultados.face_landmarks:
             bebe_presente = True
             tiempo_sin_rostro = None
@@ -282,7 +282,7 @@ with mp_holistic.Holistic(
             hombro_der = landmarks[mp_holistic.PoseLandmark.RIGHT_SHOULDER.value]
 
             mp_drawing.draw_landmarks(
-                image_mesh, 
+                image_mesh,
                 resultados.pose_landmarks, 
                 mp_holistic.POSE_CONNECTIONS,
                 landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
@@ -316,28 +316,24 @@ with mp_holistic.Holistic(
             else:
                 tiempo_mala_postura = None
 
-        with lock:
-            output_frame = image_mesh.copy()
-
+        # ==================================================
+        # ACTUALIZACIÓN DE STREAMS INDEPENDIENTES PARA FLASK
+        # ==================================================
         if origen_camara == "Camara Local":
-            # Si procesamos la cámara local, mandamos el dibujo a su stream
             with lock_local:
                 output_frame_local = image_mesh.copy()
-            # Y mantenemos el stream de la IR vivo con su frame crudo
             with lock_ir:
                 if success_pc:
                     output_frame_ir = frame_pc.copy()
                     
         elif origen_camara == "Camara IR":
-            # Si procesamos la cámara IR, mandamos el dibujo a su stream
             with lock_ir:
                 output_frame_ir = image_mesh.copy()
-            # Y mantenemos el stream local vivo con su frame crudo
             with lock_local:
                 if success_local:
                     output_frame_local = frame_local.copy()
-                    
-        # --- C) ENVÍO A MQTT ---
+
+        # --- C) ENVÍO A MQTT (Solo Alertas Visuales) ---
         if alerta_critica:
             nombre_foto = f"/app/alertas/alerta_{origen_camara.replace(' ', '_')}_{int(time.time())}.png"
             cv2.imwrite(nombre_foto, original) 
