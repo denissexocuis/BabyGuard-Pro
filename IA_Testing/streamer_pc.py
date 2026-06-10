@@ -4,7 +4,7 @@ import time
 
 # --- CONFIGURACIÓN ---
 # ¡Cambia esto por la IP que la ESP32 te dé en el Monitor Serial!
-ESP32_URL = "http://10.97.203.75:81/upload"
+ESP32_URL = "http://10.220.244.165:81/upload"
 FUENTE_VIDEO = 2 # Tu cámara IR en la PC
 
 # Límite de FPS (10 es ideal para no saturar al microcontrolador)
