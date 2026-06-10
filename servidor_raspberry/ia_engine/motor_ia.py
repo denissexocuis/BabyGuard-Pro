@@ -20,31 +20,35 @@ import struct
 # 1. FLASK - servidor de stream
 # ==========================================
 app = Flask(__name__)
-output_frame = None
+output_frame_local = None
+output_frame_ir = None
 lock = threading.Lock()
  
-def generate_stream():
-    global output_frame
+def generate_stream(tipo_camara):
+    global output_frame_local, output_frame_ir
     while True:
         with lock:
-            if output_frame is None:
+            frame = output_frame_local if tipo_camara == "local" else output_frame_ir
+            if frame is None:
                 continue
-            ret, buffer = cv2.imencode('.jpg', output_frame)
+            ret, buffer = cv2.imencode('.jpg', frame)
             if not ret:
                 continue
-            frame = buffer.tobytes()
+            frame_bytes = buffer.tobytes()
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
  
-@app.route('/video')
-def video():
-    return Response(generate_stream(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.route('/video_local')
+def video_local():
+    return Response(generate_stream("local"), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/video_ir')
+def video_ir():
+    return Response(generate_stream("ir"), mimetype='multipart/x-mixed-replace; boundary=frame')
  
 def run_flask():
     app.run(host='0.0.0.0', port=8081, threaded=True)
  
-# Iniciar Flask en un hilo separado
 flask_thread = threading.Thread(target=run_flask)
 flask_thread.daemon = True
 flask_thread.start()
@@ -65,52 +69,63 @@ mqtt_client.loop_start()
 # ==========================================
 # 3. MOTOR DE AUDIO (HILO SECUNDARIO)
 # ==========================================
+# ==========================================
+# 3. MOTOR DE AUDIO (NATIVO LINUX)
+# ==========================================
 def motor_de_audio():
+    import subprocess
+    import math
+    import struct
+    import time
+    
     CHUNK = 1024
-    FORMAT = pyaudio.paInt16
-    CHANNELS = 1
-    RATE = 44100
-    UMBRAL_DECIBELIOS = 75   # <-- Ajusta a partir de cuántos dB es alarma
+    UMBRAL_DECIBELIOS = 75   # <-- Ajusta tu umbral
     TIEMPO_ESPERA = 5
 
-    p = pyaudio.PyAudio()
+    print("🎙️ Motor de audio iniciado (Modo Nativo ALSA plughw:1,0)...", flush=True)
+    ultimo_aviso = 0
+    tiempo_ultimo_envio_db = 0
+
+    # Usamos plughw:1,0 -> "plug" adapta automáticamente los canales mono/estéreo
+    comando = ['arecord', '-D', 'plughw:1,0', '-f', 'S16_LE', '-r', '44100', '-c', '1', '-q']
     
     try:
-        # RECUERDA: Ajustar input_device_index=1 con el ID real de tu adaptador USB
-        stream = p.open(format=FORMAT,
-                        channels=CHANNELS,
-                        rate=RATE,
-                        input=True,
-                        frames_per_buffer=CHUNK,
-                        input_device_index=1) 
-        print("🎙️ Motor de audio (Micrófono USB) iniciado en segundo plano...")
-    except Exception as e:
-        print(f"⚠️ Error grave al abrir el micrófono: {e}")
-        return
-
-    ultimo_aviso = 0
-
-    try:
+        # Abrimos el micrófono directamente desde el sistema operativo
+        proceso = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
         while True:
-            data = stream.read(CHUNK, exception_on_overflow=False)
-            count = len(data) / 2
-            format_string = "%dh" % (count)
+            # Leemos el equivalente a CHUNK en bytes (16 bits = 2 bytes por muestra)
+            data = proceso.stdout.read(CHUNK * 2)
+            
+            if not data:
+                time.sleep(0.1)
+                continue
+
+            count = len(data) // 2
+            format_string = f"<{count}h" 
             shorts = struct.unpack(format_string, data)
             
             suma_cuadrados = sum(s**2 for s in shorts)
-            rms = math.sqrt(suma_cuadrados / count)
+            rms = math.sqrt(suma_cuadrados / count) if count > 0 else 0
             
             if rms > 0:
                 db = 20 * math.log10(rms)
                 db_calibrado = db + 20 
                 
+                ahora = time.time()
+                
+                # Enviar nivel de ruido al Dashboard cada 1 segundo
+                if (ahora - tiempo_ultimo_envio_db) >= 1.0:
+                    payload_dashboard = { "ruido": round(db_calibrado, 2) }
+                    mqtt_client.publish("babyguard/sensores", json.dumps(payload_dashboard))
+                    tiempo_ultimo_envio_db = ahora
+
+                # Alerta de llanto
                 if db_calibrado > UMBRAL_DECIBELIOS:
-                    ahora = time.time()
                     if (ahora - ultimo_aviso) > TIEMPO_ESPERA:
                         mensaje = f"¡Llanto ruidoso detectado! ({db_calibrado:.2f} dB)"
-                        print(f"🚨 (AUDIO) {mensaje}")
+                        print(f"(AUDIO) {mensaje}", flush=True)
                         
-                        # Creamos un payload JSON igual que el de video pero sin la imagen
                         payload = {
                             "alerta": "CRITICA_AUDIO",
                             "mensaje": mensaje,
@@ -120,12 +135,11 @@ def motor_de_audio():
                         ultimo_aviso = ahora
                         
     except Exception as e:
-        print(f"Error procesando el audio: {e}")
+        print(f"Error procesando el audio nativo: {e}")
     finally:
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
-
+        if 'proceso' in locals():
+            proceso.kill()
+            
 # Iniciar el hilo de audio
 audio_thread = threading.Thread(target=motor_de_audio)
 audio_thread.daemon = True
@@ -301,7 +315,10 @@ with mp_holistic.Holistic(
                 tiempo_mala_postura = None
 
         with lock:
-            output_frame = image_mesh.copy()
+            if origen_camara == "Camara Local":
+                output_frame_local = image_mesh.copy()
+            else:
+                output_frame_ir = image_mesh.copy()
 
         # --- C) ENVÍO A MQTT ---
         if alerta_critica:
