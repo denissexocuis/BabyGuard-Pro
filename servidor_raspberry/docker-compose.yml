@@ -48,6 +48,7 @@ services:
     privileged: true                  # <--- dar acceso de hardware real
     group_add:
       - "39"          # <-- ID real del grupo video en mi sistema de denisso
+      - "audio"
     ports:
       - "8081:8081"  # <--- abre el puerto del video
     volumes:
@@ -56,6 +57,7 @@ services:
     devices:
       - "/dev/video0:/dev/video0"
       - "/dev/video1:/dev/video1"  # por si acaso la lap usa video1
+      - "/dev/snd:/dev/snd"
     depends_on:
       - broker
     restart: always
