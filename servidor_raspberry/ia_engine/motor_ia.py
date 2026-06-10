@@ -12,33 +12,48 @@ import threading
 import glob
 from flask import Flask, Response
 
-# FLASK - servidor de stream
 app = Flask(__name__)
-output_frame = None
-lock = threading.Lock()
+
+output_frame_local = None
+output_frame_ir = None
+lock_local = threading.Lock()
+lock_ir = threading.Lock()
  
-def generate_stream():
-    global output_frame
+def generate_stream_local():
+    global output_frame_local
     while True:
-        with lock:
-            if output_frame is None:
+        with lock_local:
+            if output_frame_local is None:
                 continue
-            ret, buffer = cv2.imencode('.jpg', output_frame)
+            ret, buffer = cv2.imencode('.jpg', output_frame_local)
             if not ret:
                 continue
             frame = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+def generate_stream_ir():
+    global output_frame_ir
+    while True:
+        with lock_ir:
+            if output_frame_ir is None:
+                continue
+            ret, buffer = cv2.imencode('.jpg', output_frame_ir)
+            if not ret:
+                continue
+            frame = buffer.tobytes()
+        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
  
-@app.route('/video')
-def video():
-    return Response(generate_stream(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.route('/video_local')
+def video_local():
+    return Response(generate_stream_local(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/video_ir')
+def video_ir():
+    return Response(generate_stream_ir(), mimetype='multipart/x-mixed-replace; boundary=frame')
  
 def run_flask():
     app.run(host='0.0.0.0', port=8081, threaded=True)
  
-# Iniciar Flask en un hilo separado
 flask_thread = threading.Thread(target=run_flask)
 flask_thread.daemon = True
 flask_thread.start()
@@ -61,7 +76,7 @@ mqtt_client.loop_start()
 FUENTE_VIDEO = 0
 
 # Camara infrarroja de la pc
-URL_ESP32 = "http://10.97.203.75:81/stream"
+URL_ESP32 = "http://10.220.244.165:81/upload"
 cap_pc = cv2.VideoCapture(URL_ESP32)
 
 mp_holistic = mp.solutions.holistic
@@ -241,6 +256,24 @@ with mp_holistic.Holistic(
         with lock:
             output_frame = image_mesh.copy()
 
+        if origen_camara == "Camara Local":
+            # Si procesamos la cámara local, mandamos el dibujo a su stream
+            with lock_local:
+                output_frame_local = image_mesh.copy()
+            # Y mantenemos el stream de la IR vivo con su frame crudo
+            with lock_ir:
+                if success_pc:
+                    output_frame_ir = frame_pc.copy()
+                    
+        elif origen_camara == "Camara IR":
+            # Si procesamos la cámara IR, mandamos el dibujo a su stream
+            with lock_ir:
+                output_frame_ir = image_mesh.copy()
+            # Y mantenemos el stream local vivo con su frame crudo
+            with lock_local:
+                if success_local:
+                    output_frame_local = frame_local.copy()
+                    
         # --- C) ENVÍO A MQTT ---
         if alerta_critica:
             nombre_foto = f"/app/alertas/alerta_{origen_camara.replace(' ', '_')}_{int(time.time())}.png"
