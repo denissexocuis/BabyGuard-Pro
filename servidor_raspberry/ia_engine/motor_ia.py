@@ -207,21 +207,21 @@ with mp_holistic.Holistic(
         contador = 0
 
         # === INTERCALADOR DE CÁMARAS ===
-        turno_camara_local = not turno_camara_local
+        # turno_camara_local = not turno_camara_local
         
         if turno_camara_local and success_local:
             image = frame_local.copy()
             origen_camara = "Camara Local"
-        elif not turno_camara_local and success_pc:
-            image = frame_pc.copy()
-            origen_camara = "Camara IR"
-        else:
-            if success_local:
-                image = frame_local.copy()
-                origen_camara = "Camara Local"
-            else:
-                image = frame_pc.copy()
-                origen_camara = "Camara IR"
+        # elif not turno_camara_local and success_pc:
+        #     image = frame_pc.copy()
+        #     origen_camara = "Camara IR"
+        # else:
+        #     if success_local:
+        #         image = frame_local.copy()
+        #         origen_camara = "Camara Local"
+        #     else:
+        #         image = frame_pc.copy()
+        #         origen_camara = "Camara IR"
         # ===============================
 
         original = image.copy()
