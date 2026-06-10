@@ -28,26 +28,34 @@ lock_ir = threading.Lock()
 def generate_stream_local():
     global output_frame_local
     while True:
+        # ---> EL FRENO DE MANO <---
+        if output_frame_local is None:
+            time.sleep(0.1) 
+            continue
+            
         with lock_local:
-            if output_frame_local is None:
-                continue
             ret, buffer = cv2.imencode('.jpg', output_frame_local)
-            if not ret:
-                continue
-            frame = buffer.tobytes()
+        if not ret:
+            continue
+        frame = buffer.tobytes()
         yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        time.sleep(0.03)
 
 def generate_stream_ir():
     global output_frame_ir
     while True:
+        # ---> EL FRENO DE MANO <---
+        if output_frame_ir is None:
+            time.sleep(0.1) 
+            continue
+            
         with lock_ir:
-            if output_frame_ir is None:
-                continue
             ret, buffer = cv2.imencode('.jpg', output_frame_ir)
-            if not ret:
-                continue
-            frame = buffer.tobytes()
+        if not ret:
+            continue
+        frame = buffer.tobytes()
         yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        time.sleep(0.03)
  
 @app.route('/video_local')
 def video_local():
@@ -86,24 +94,19 @@ def motor_de_audio():
     import time
     
     CHUNK = 1024
-    UMBRAL_DECIBELIOS = 75   # <-- Ajusta tu umbral
+    UMBRAL_DECIBELIOS = 75
     TIEMPO_ESPERA = 5
 
     print("🎙️ Motor de audio iniciado (Modo Nativo ALSA plughw:1,0)...", flush=True)
     ultimo_aviso = 0
     tiempo_ultimo_envio_db = 0
 
-    # Usamos plughw:1,0 -> "plug" adapta automáticamente los canales mono/estéreo
     comando = ['arecord', '-D', 'plughw:1,0', '-f', 'S16_LE', '-r', '44100', '-c', '1', '-q']
     
     try:
-        # Abrimos el micrófono directamente desde el sistema operativo
         proceso = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
         while True:
-            # Leemos el equivalente a CHUNK en bytes (16 bits = 2 bytes por muestra)
             data = proceso.stdout.read(CHUNK * 2)
-            
             if not data:
                 time.sleep(0.1)
                 continue
@@ -121,13 +124,11 @@ def motor_de_audio():
                 
                 ahora = time.time()
                 
-                # Enviar nivel de ruido al Dashboard cada 1 segundo
                 if (ahora - tiempo_ultimo_envio_db) >= 1.0:
                     payload_dashboard = { "ruido": round(db_calibrado, 2) }
                     mqtt_client.publish("babyguard/sensores", json.dumps(payload_dashboard))
                     tiempo_ultimo_envio_db = ahora
 
-                # Alerta de llanto
                 if db_calibrado > UMBRAL_DECIBELIOS:
                     if (ahora - ultimo_aviso) > TIEMPO_ESPERA:
                         mensaje = f"¡Llanto ruidoso detectado! ({db_calibrado:.2f} dB)"
@@ -147,7 +148,6 @@ def motor_de_audio():
         if 'proceso' in locals():
             proceso.kill()
             
-# Iniciar el hilo de audio
 audio_thread = threading.Thread(target=motor_de_audio)
 audio_thread.daemon = True
 audio_thread.start()
@@ -158,7 +158,6 @@ audio_thread.start()
 FUENTE_VIDEO = 0 
 cap_local = cv2.VideoCapture(FUENTE_VIDEO)
 
-# URL de la ESP32 (Asegúrate de que la IP sea la correcta al conectar)
 URL_ESP32 = "http://10.220.244.165:81/stream"
 cap_pc = cv2.VideoCapture(URL_ESP32)
 
@@ -169,7 +168,6 @@ mp_drawing_styles = mp.solutions.drawing_styles
 def calcular_distancia(p1, p2):
     return math.hypot(p2.x - p1.x, p2.y - p1.y)
 
-# Variables de estado
 tiempo_sin_rostro = None
 tiempo_mala_postura = None
 tiempo_ultima_alerta = 0
@@ -181,7 +179,7 @@ frames_a_skippear = 1
 contador = 0
 turno_camara_local = True
 
-print("👁️ Iniciando BabyGuard Pro - Monitor Dual (Día/Noche) y Audio")
+print("👁️ Iniciando BabyGuard Pro - Monitor Dual (Día/Noche) y Audio", flush=True)
 
 # ==========================================
 # 5. BUCLE PRINCIPAL DE IA (VIDEO)
@@ -195,11 +193,17 @@ with mp_holistic.Holistic(
         success_pc, frame_pc = cap_pc.read()
         
         if not success_local and not success_pc:
+            time.sleep(0.5)
             continue
 
         contador += 1
         if contador < frames_a_skippear:
             continue
+        
+        # ---> NUEVA ALARMA: Nos avisará si la ESP32 no responde <---
+        if contador % 50 == 0 and not success_pc:
+            print(f"⚠️ No se puede leer la cámara IR ({URL_ESP32}). ¿Está prendida?", flush=True)
+            
         contador = 0
 
         # === INTERCALADOR DE CÁMARAS ===
@@ -343,7 +347,7 @@ with mp_holistic.Holistic(
         if alerta_critica:
             nombre_foto = f"/app/alertas/alerta_{origen_camara.replace(' ', '_')}_{int(time.time())}.png"
             cv2.imwrite(nombre_foto, original) 
-            print(f"!! (ALERTA VISUAL) {mensaje_alerta}")
+            print(f"!! (ALERTA VISUAL) {mensaje_alerta}", flush=True)
             
             try:
                 with open(nombre_foto, "rb") as image_file:
@@ -356,9 +360,9 @@ with mp_holistic.Holistic(
                 }
                 
                 mqtt_client.publish(MQTT_TOPIC_CAMARA, json.dumps(payload))
-                print(f"// (ENVIO) Payload MQTT listo.")
+                print(f"// (ENVIO) Payload MQTT listo.", flush=True)
             except Exception as e:
-                print(f"!! (ENVIO) Error enviando la alerta MQTT: {e}")
+                print(f"!! (ENVIO) Error enviando la alerta MQTT: {e}", flush=True)
             
             fotos = glob.glob('/app/alertas/alerta_*.png')
             fotos.sort()
