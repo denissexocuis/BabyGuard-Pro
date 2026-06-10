@@ -12,39 +12,50 @@ import threading
 import glob
 from flask import Flask, Response
 
-# ---> NUEVAS LIBRERÍAS PARA EL AUDIO <---
-import pyaudio
+# ---> LIBRERÍAS PARA EL AUDIO <---
 import struct
 
 # ==========================================
-# 1. FLASK - servidor de stream
+# 1. FLASK - SERVIDOR DE STREAM DUAL
 # ==========================================
 app = Flask(__name__)
+
 output_frame_local = None
 output_frame_ir = None
-lock = threading.Lock()
+lock_local = threading.Lock()
+lock_ir = threading.Lock()
  
-def generate_stream(tipo_camara):
-    global output_frame_local, output_frame_ir
+def generate_stream_local():
+    global output_frame_local
     while True:
-        with lock:
-            frame = output_frame_local if tipo_camara == "local" else output_frame_ir
-            if frame is None:
+        with lock_local:
+            if output_frame_local is None:
                 continue
-            ret, buffer = cv2.imencode('.jpg', frame)
+            ret, buffer = cv2.imencode('.jpg', output_frame_local)
             if not ret:
                 continue
-            frame_bytes = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            frame = buffer.tobytes()
+        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+def generate_stream_ir():
+    global output_frame_ir
+    while True:
+        with lock_ir:
+            if output_frame_ir is None:
+                continue
+            ret, buffer = cv2.imencode('.jpg', output_frame_ir)
+            if not ret:
+                continue
+            frame = buffer.tobytes()
+        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
  
 @app.route('/video_local')
 def video_local():
-    return Response(generate_stream("local"), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(generate_stream_local(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/video_ir')
 def video_ir():
-    return Response(generate_stream("ir"), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(generate_stream_ir(), mimetype='multipart/x-mixed-replace; boundary=frame')
  
 def run_flask():
     app.run(host='0.0.0.0', port=8081, threaded=True)
@@ -54,21 +65,18 @@ flask_thread.daemon = True
 flask_thread.start()
 
 # ==========================================
-# 2. MQTT
+# 2. CONFIGURACIÓN MQTT
 # ==========================================
 MQTT_BROKER = "broker"
 MQTT_PORT = 1883
 MQTT_TOPIC_CAMARA = "babyguard/alertas/camara"
-MQTT_TOPIC_AUDIO = "babyguard/alertas/audio" # <-- Nuevo tópico para separar el llanto real del visual
+MQTT_TOPIC_AUDIO = "babyguard/alertas/audio"
 
 print("Conectando al Broker MQTT local de BabyGuard...")
 mqtt_client = mqtt.Client()
 mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 mqtt_client.loop_start()
 
-# ==========================================
-# 3. MOTOR DE AUDIO (HILO SECUNDARIO)
-# ==========================================
 # ==========================================
 # 3. MOTOR DE AUDIO (NATIVO LINUX)
 # ==========================================
@@ -124,7 +132,7 @@ def motor_de_audio():
                 if db_calibrado > UMBRAL_DECIBELIOS:
                     if (ahora - ultimo_aviso) > TIEMPO_ESPERA:
                         mensaje = f"¡Llanto ruidoso detectado! ({db_calibrado:.2f} dB)"
-                        print(f"(AUDIO) {mensaje}", flush=True)
+                        print(f"🚨 (AUDIO) {mensaje}", flush=True)
                         
                         payload = {
                             "alerta": "CRITICA_AUDIO",
@@ -145,21 +153,19 @@ audio_thread = threading.Thread(target=motor_de_audio)
 audio_thread.daemon = True
 audio_thread.start()
 
-
 # ==========================================
-# 4. MEDIAPIPE Y MOTOR DE VIDEO (HILO PRINCIPAL)
+# 4. CONFIGURACIÓN DE CÁMARAS Y MEDIAPIPE
 # ==========================================
-FUENTE_VIDEO = 0
-URL_ESP32 = "http://10.97.203.75:81/stream"
+FUENTE_VIDEO = 0 
+cap_local = cv2.VideoCapture(FUENTE_VIDEO)
 
+# URL de la ESP32 (Asegúrate de que la IP sea la correcta al conectar)
+URL_ESP32 = "http://10.220.244.165:81/upload"
 cap_pc = cv2.VideoCapture(URL_ESP32)
 
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
-
-# ¡CORRECCIÓN DE BUG! Renombrado cap a cap_local para que coincida con tu ciclo while
-cap_local = cv2.VideoCapture(FUENTE_VIDEO)
 
 def calcular_distancia(p1, p2):
     return math.hypot(p2.x - p1.x, p2.y - p1.y)
@@ -171,15 +177,16 @@ tiempo_ultima_alerta = 0
 cooldown_alertas = 5
 segundos_limite = 1.5
 
-print(f"👁️ Iniciando BabyGuard Pro - Monitor Dual (Día/Noche) en: {FUENTE_VIDEO}")
-
 framerate = 100 
 frames_a_skippear = 1 
-
-delay = 1 / float(framerate)
 contador = 0
 turno_camara_local = True
 
+print("👁️ Iniciando BabyGuard Pro - Monitor Dual (Día/Noche) y Audio")
+
+# ==========================================
+# 5. BUCLE PRINCIPAL DE IA (VIDEO)
+# ==========================================
 with mp_holistic.Holistic(
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5) as holistic_model:
@@ -196,6 +203,7 @@ with mp_holistic.Holistic(
             continue
         contador = 0
 
+        # === INTERCALADOR DE CÁMARAS ===
         turno_camara_local = not turno_camara_local
         
         if turno_camara_local and success_local:
@@ -211,6 +219,7 @@ with mp_holistic.Holistic(
             else:
                 image = frame_pc.copy()
                 origen_camara = "Camara IR"
+        # ===============================
 
         original = image.copy()
         image_mesh = image.copy()
@@ -223,7 +232,7 @@ with mp_holistic.Holistic(
         alerta_critica = False
         mensaje_alerta = ""
 
-        # --- A) EVALUACIÓN DE ROSTRO ---
+        # --- A) EVALUACIÓN DE ROSTRO Y LLANTO VISUAL ---
         if resultados.face_landmarks:
             bebe_presente = True
             tiempo_sin_rostro = None
@@ -280,7 +289,7 @@ with mp_holistic.Holistic(
             hombro_der = landmarks[mp_holistic.PoseLandmark.RIGHT_SHOULDER.value]
 
             mp_drawing.draw_landmarks(
-                image_mesh, 
+                image_mesh,
                 resultados.pose_landmarks, 
                 mp_holistic.POSE_CONNECTIONS,
                 landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
@@ -314,13 +323,24 @@ with mp_holistic.Holistic(
             else:
                 tiempo_mala_postura = None
 
-        with lock:
-            if origen_camara == "Camara Local":
+        # ==================================================
+        # ACTUALIZACIÓN DE STREAMS INDEPENDIENTES PARA FLASK
+        # ==================================================
+        if origen_camara == "Camara Local":
+            with lock_local:
                 output_frame_local = image_mesh.copy()
-            else:
+            with lock_ir:
+                if success_pc:
+                    output_frame_ir = frame_pc.copy()
+                    
+        elif origen_camara == "Camara IR":
+            with lock_ir:
                 output_frame_ir = image_mesh.copy()
+            with lock_local:
+                if success_local:
+                    output_frame_local = frame_local.copy()
 
-        # --- C) ENVÍO A MQTT ---
+        # --- C) ENVÍO A MQTT (Solo Alertas Visuales) ---
         if alerta_critica:
             nombre_foto = f"/app/alertas/alerta_{origen_camara.replace(' ', '_')}_{int(time.time())}.png"
             cv2.imwrite(nombre_foto, original) 
