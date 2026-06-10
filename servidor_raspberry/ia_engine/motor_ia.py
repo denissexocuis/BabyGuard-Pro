@@ -9,7 +9,6 @@ import json
 import paho.mqtt.client as mqtt
 import math
 import threading
-import os
 import glob
 from flask import Flask, Response
 
@@ -61,15 +60,21 @@ mqtt_client.loop_start()
 # FUENTE_VIDEO = "Media/Test/Videos/baby_4.mp4"
 FUENTE_VIDEO = 0
 
+# Camara infrarroja de la pc
+URL_ESP32 = "http://10.97.203.75:81/stream"
+cap_pc = cv2.VideoCapture(URL_ESP32)
+
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 
+# camara externa usb
 cap = cv2.VideoCapture(FUENTE_VIDEO)
 
 def calcular_distancia(p1, p2):
     return math.hypot(p2.x - p1.x, p2.y - p1.y)
 
+# Variables de estado
 tiempo_sin_rostro = None
 tiempo_mala_postura = None
 tiempo_ultima_alerta = 0
@@ -88,39 +93,59 @@ frames_a_skippear = 1 # configuracion de cuantos frames quiero saltar
 delay = 1 / float(framerate)
 contador = 0
 
+# Bandera para alternar el procesamiento entre las dos cámaras
+turno_camara_local = True
+
+print("Iniciando BabyGuard Pro - Monitor Dual (Día/Noche)")
+
 with mp_holistic.Holistic(
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5) as holistic_model:
     
     while True:
-        success, image = cap.read()
+        # Siempre leemos AMBAS cámaras para vaciar el buffer y evitar lag
+        success_local, frame_local = cap_local.read()
+        success_pc, frame_pc = cap_pc.read()
         
-        if not success:
-            print("-- (deteccion) Fin del video de prueba. Reiniciando bucle...")
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        if not success_local and not success_pc:
+            continue # Si ambas fallan, saltar
+
+        contador += 1
+        if contador < frames_a_skippear:
             continue
+        contador = 0
+
+        # intercalador de camaras
+        turno_camara_local = not turno_camara_local
+        
+        if turno_camara_local and success_local:
+            image = frame_local.copy()
+            origen_camara = "Camara Local"
+        elif not turno_camara_local and success_pc:
+            image = frame_pc.copy()
+            origen_camara = "Camara IR"
+        else:
+            # Respaldo: si tocaba una cámara pero se desconectó, usamos la otra
+            if success_local:
+                image = frame_local.copy()
+                origen_camara = "Camara Local"
+            else:
+                image = frame_pc.copy()
+                origen_camara = "Camara IR"
 
         original = image.copy()
         image_mesh = image.copy()
         image_pose = image.copy()
 
-        # contador para skipeo de frames para evitar el sobreprocesamiento en la Rasp
-        contador += 1
-        if contador < frames_a_skippear:
-            with lock:
-                output_frame = original.copy()
-            continue
-
-        contador = 0
-
+        # Inferencia neuronal sobre la cámara seleccionada en este ciclo
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         resultados = holistic_model.process(image_rgb)
 
-        # flags de estado del bebe
         bebe_presente = False
         alerta_critica = False
         mensaje_alerta = ""
 
+        # --- A) EVALUACIÓN DE ROSTRO Y LLANTO ---
         if resultados.face_landmarks:
             bebe_presente = True
             tiempo_sin_rostro = None
@@ -137,16 +162,13 @@ with mp_holistic.Holistic(
             
             if ancho_boca > 0:
                 ratio_boca = apertura_boca / ancho_boca
-                
                 if ratio_boca > 0.6:
-                    print("// (log) Bebe en llanto")
                     tiempo_actual = time.time()
                     if tiempo_actual - tiempo_ultima_alerta > cooldown_alertas:
                         alerta_critica = True
-                        mensaje_alerta = "¡Bebe de pie o peligrosamente cerca de la cámara!"
+                        mensaje_alerta = "¡Bebé en llanto detectado!"
                         tiempo_ultima_alerta = tiempo_actual
             
-            # dibujo de tesselado de rostro (los triangulos de la cara)
             mp_drawing.draw_landmarks(
                 image=image_mesh,
                 landmark_list=resultados.face_landmarks,
@@ -154,35 +176,25 @@ with mp_holistic.Holistic(
                 landmark_drawing_spec=None,
                 connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style())
             
-            # dibujar contornos (ojos, cejas, labios y cara)
-            mp_drawing.draw_landmarks(
-                image=image_mesh,
-                landmark_list=resultados.face_landmarks,
-                connections=mp_holistic.FACEMESH_CONTOURS,
-                landmark_drawing_spec=None,
-                connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style())
+            # Etiqueta en pantalla mostrando qué cámara está activa
+            cv2.putText(image_mesh, f"Bebe Detectado ({origen_camara})", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
             
-            cv2.putText(image_mesh, "Bebe Detectado", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-            print("// (log) Bebe en pantalla.")
         else:
-            # ALERTAS DE QUE NO HAY BEBE EN LA IMAGEN
-
             if tiempo_sin_rostro is None:
                 tiempo_sin_rostro = time.time()
             
             tiempo_transcurrido = time.time() - tiempo_sin_rostro
-            print(f"!! (ALERTA) Sin bebe detectado por {round(tiempo_transcurrido,3)} segundos.")
             tiempo_restante = max(0, round(segundos_limite - tiempo_transcurrido + 1, 2))
             
-            cv2.putText(image, f"Sin bebe... Foto en: {tiempo_restante}s", (20, 40), 
+            cv2.putText(image_mesh, f"Sin bebe en {origen_camara} ({tiempo_restante}s)", (20, 40), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
             if tiempo_transcurrido >= segundos_limite:
                 alerta_critica = True
-                mensaje_alerta = "Bebe no detectado en la cuna..."
+                mensaje_alerta = f"Bebe no detectado en la cuna ({origen_camara})"
                 tiempo_sin_rostro = time.time()
 
-        # POSTURA DEL BEBE
+        # --- B) EVALUACIÓN DE POSTURA ---
         if resultados.pose_landmarks and bebe_presente:
             landmarks = resultados.pose_landmarks.landmark
             
@@ -190,56 +202,50 @@ with mp_holistic.Holistic(
             hombro_izq = landmarks[mp_holistic.PoseLandmark.LEFT_SHOULDER.value]
             hombro_der = landmarks[mp_holistic.PoseLandmark.RIGHT_SHOULDER.value]
 
-            # Dibujo de esqueleto en la imagen de postura
             mp_drawing.draw_landmarks(
-                image_pose, 
+                image_mesh, # Dibujamos en la misma imagen para que Flask muestre todo
                 resultados.pose_landmarks, 
                 mp_holistic.POSE_CONNECTIONS,
                 landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
 
-            estado_postura = "Postura: Segura"
-            color_postura = (0, 255, 0) # Verde
+            estado_postura = "Segura"
+            color_postura = (0, 255, 0)
 
-            # se calcula la distancia entre los hombros para ver si esta parado
-            # la camara se encuentra justo encima de la cuna,
-            # asi que se calcula la distancia de hombro a hombro para calcular cercania
             distancia_hombros = abs(hombro_izq.x - hombro_der.x)
-            limite_cercania = 0.30 # cerca del 30% del ancho de la camara
+            limite_cercania = 0.30 
             
             if distancia_hombros > limite_cercania:
-                estado_postura = "¡PELIGRO: Trepando!"
-                color_postura = (0, 0, 255) # Rojo
+                estado_postura = "¡Trepando!"
+                color_postura = (0, 0, 255) 
                 alerta_critica = True
-                mensaje_alerta = "¡Bebe de pie o peligrosamente cerca de la cámara!"
+                mensaje_alerta = f"¡Bebe de pie o cerca de la cámara! ({origen_camara})"
 
-            # buena visibilidad de hombros (espalda) pero nada de visibilidad en la nariz
             elif (hombro_izq.visibility > 0.6 and hombro_der.visibility > 0.6) and nariz.visibility < 0.2:
-                estado_postura = "¡PELIGRO: Boca abajo!"
+                estado_postura = "¡Boca abajo!"
                 color_postura = (0, 0, 255)
                 alerta_critica = True
-                mensaje_alerta = "¡Bebe posicionado boca abajo!"
+                mensaje_alerta = f"¡Bebe posicionado boca abajo! ({origen_camara})"
 
-            cv2.putText(image_pose, estado_postura, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color_postura, 2)
+            cv2.putText(image_mesh, f"Postura: {estado_postura}", (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color_postura, 2)
             
-            # temporizador para posturas peligrosas
             if alerta_critica and "PELIGRO" in estado_postura:
                 if tiempo_mala_postura is None:
                     tiempo_mala_postura = time.time()
                 
                 if time.time() - tiempo_mala_postura < segundos_limite:
-                    alerta_critica = False # reset mientras no se termine el tiempo
+                    alerta_critica = False 
             else:
                 tiempo_mala_postura = None
-
 
         # Actualizar frame para el stream Flask
         with lock:
             output_frame = image_mesh.copy()
 
-        # ENVIO A MQTT
+        # --- C) ENVÍO A MQTT ---
         if alerta_critica:
-            nombre_foto = f"alerta_mesh_{int(time.time())}.png"
-            cv2.imwrite(nombre_foto, original) # Mandamos la foto limpia al dashboard
+            nombre_foto = f"/app/alertas/alerta_{origen_camara.replace(' ', '_')}_{int(time.time())}.png"
+            # Ojo: asegúrate de que el directorio /app/alertas/ exista o quitar /app/alertas/ si estás local
+            cv2.imwrite(nombre_foto, original) 
             print(f"!! (ALERTA) {mensaje_alerta}")
             
             try:
@@ -253,16 +259,19 @@ with mp_holistic.Holistic(
                 }
                 
                 mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
-                print(f"// (ENVIO) Payload MQTT listo para: {mensaje_alerta}")
+                print(f"// (ENVIO) Payload MQTT listo.")
             except Exception as e:
                 print(f"!! (ENVIO) Error enviando la alerta MQTT: {e}")
             
-            # Borrar fotos viejas, guardar solo las últimas 20
-            fotos = glob.glob('/app/alertas/alerta_mesh_*.png')
+            # Limpieza de fotos viejas
+            fotos = glob.glob('/app/alertas/alerta_*.png')
             fotos.sort()
             if len(fotos) > 20:
                 for foto_vieja in fotos[:-20]:
-                    os.remove(foto_vieja)
+                    try:
+                        os.remove(foto_vieja)
+                    except:
+                        pass
 
             if "detectado" not in mensaje_alerta:
-                tiempo_mala_postura = time.time() # Reset de seguridad
+                tiempo_mala_postura = time.time()

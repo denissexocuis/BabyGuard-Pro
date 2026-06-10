@@ -4,7 +4,7 @@
 // ---------------------------------------------------------
 // Configuración de Red
 // ---------------------------------------------------------
-const char* ssid = "TOnePlus Nord 5 t2yq";
+const char* ssid = "OnePlus Nord 5 t2yq";
 const char* password = "del0al10";
 
 // ---------------------------------------------------------
