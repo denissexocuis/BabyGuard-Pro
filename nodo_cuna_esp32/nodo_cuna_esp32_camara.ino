@@ -128,10 +128,30 @@ void setup() {
     Serial.println("Error: PSRAM no disponible.");
   }
 
+  // 1. Forzar modo cliente (Estación) y apagar cualquier punto de acceso oculto
+  WiFi.mode(WIFI_STA);
+  
+  // 2. Desconectar y limpiar credenciales viejas de la memoria caché
+  WiFi.disconnect(true);
+  delay(1000);
+
+  Serial.print("Conectando a: ");
+  Serial.println(ssid);
+
+  // 3. Iniciar conexión
   WiFi.begin(ssid, password);
+
+  // 4. Temporizador de seguridad (Si falla por 15 segundos, reiniciamos la placa físicamente)
+  int intentos = 0;
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
+    intentos++;
+    
+    if (intentos > 30) { 
+      Serial.println("\nFallo total de Wi-Fi. Reiniciando hardware...");
+      ESP.restart(); 
+    }
   }
   
   Serial.println("\nWiFi conectado!");
