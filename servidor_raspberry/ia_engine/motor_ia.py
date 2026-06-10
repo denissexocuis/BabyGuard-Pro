@@ -12,7 +12,7 @@ import threading
 import glob
 from flask import Flask, Response
 
-# ---> LIBRERÍAS PARA EL AUDIO <---
+# ---> LIBRERÍA PARA DESEMPAQUETAR EL AUDIO NATIVO <---
 import struct
 
 # ==========================================
@@ -83,7 +83,6 @@ mqtt_client.loop_start()
 def motor_de_audio():
     import subprocess
     import math
-    import struct
     import time
     
     CHUNK = 1024
