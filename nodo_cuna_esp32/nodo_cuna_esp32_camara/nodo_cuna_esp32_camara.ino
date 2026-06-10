@@ -4,8 +4,8 @@
 // ---------------------------------------------------------
 // Configuración de Red
 // ---------------------------------------------------------
-const char* ssid = "OnePlus Nord 5 t2yq";
-const char* password = "del0al10";
+const char* ssid = "Armando";
+const char* password = "12345678";
 
 // ---------------------------------------------------------
 // Servidor y Memoria

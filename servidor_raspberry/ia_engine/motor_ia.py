@@ -12,7 +12,13 @@ import threading
 import glob
 from flask import Flask, Response
 
-# FLASK - servidor de stream
+# ---> NUEVAS LIBRERÍAS PARA EL AUDIO <---
+import pyaudio
+import struct
+
+# ==========================================
+# 1. FLASK - servidor de stream
+# ==========================================
 app = Flask(__name__)
 output_frame = None
 lock = threading.Lock()
@@ -43,33 +49,103 @@ flask_thread = threading.Thread(target=run_flask)
 flask_thread.daemon = True
 flask_thread.start()
 
-# MQTT
-#MQTT_BROKER = "127.0.0.1" # para localhost
+# ==========================================
+# 2. MQTT
+# ==========================================
 MQTT_BROKER = "broker"
 MQTT_PORT = 1883
-MQTT_TOPIC = "babyguard/alertas/camara"
+MQTT_TOPIC_CAMARA = "babyguard/alertas/camara"
+MQTT_TOPIC_AUDIO = "babyguard/alertas/audio" # <-- Nuevo tópico para separar el llanto real del visual
 
 print("Conectando al Broker MQTT local de BabyGuard...")
 mqtt_client = mqtt.Client()
 mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 mqtt_client.loop_start()
 
+# ==========================================
+# 3. MOTOR DE AUDIO (HILO SECUNDARIO)
+# ==========================================
+def motor_de_audio():
+    CHUNK = 1024
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    RATE = 44100
+    UMBRAL_DECIBELIOS = 75   # <-- Ajusta a partir de cuántos dB es alarma
+    TIEMPO_ESPERA = 5
 
-# MEDIAPIPE
-# Fuente para el stream del video y uso de camara de la esp (ahi ya toca poner el topico donde se haga stream del video)
-# FUENTE_VIDEO = "Media/Test/Videos/baby_4.mp4"
+    p = pyaudio.PyAudio()
+    
+    try:
+        # RECUERDA: Ajustar input_device_index=1 con el ID real de tu adaptador USB
+        stream = p.open(format=FORMAT,
+                        channels=CHANNELS,
+                        rate=RATE,
+                        input=True,
+                        frames_per_buffer=CHUNK,
+                        input_device_index=1) 
+        print("🎙️ Motor de audio (Micrófono USB) iniciado en segundo plano...")
+    except Exception as e:
+        print(f"⚠️ Error grave al abrir el micrófono: {e}")
+        return
+
+    ultimo_aviso = 0
+
+    try:
+        while True:
+            data = stream.read(CHUNK, exception_on_overflow=False)
+            count = len(data) / 2
+            format_string = "%dh" % (count)
+            shorts = struct.unpack(format_string, data)
+            
+            suma_cuadrados = sum(s**2 for s in shorts)
+            rms = math.sqrt(suma_cuadrados / count)
+            
+            if rms > 0:
+                db = 20 * math.log10(rms)
+                db_calibrado = db + 20 
+                
+                if db_calibrado > UMBRAL_DECIBELIOS:
+                    ahora = time.time()
+                    if (ahora - ultimo_aviso) > TIEMPO_ESPERA:
+                        mensaje = f"¡Llanto ruidoso detectado! ({db_calibrado:.2f} dB)"
+                        print(f"🚨 (AUDIO) {mensaje}")
+                        
+                        # Creamos un payload JSON igual que el de video pero sin la imagen
+                        payload = {
+                            "alerta": "CRITICA_AUDIO",
+                            "mensaje": mensaje,
+                            "decibelios": round(db_calibrado, 2)
+                        }
+                        mqtt_client.publish(MQTT_TOPIC_AUDIO, json.dumps(payload))
+                        ultimo_aviso = ahora
+                        
+    except Exception as e:
+        print(f"Error procesando el audio: {e}")
+    finally:
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
+
+# Iniciar el hilo de audio
+audio_thread = threading.Thread(target=motor_de_audio)
+audio_thread.daemon = True
+audio_thread.start()
+
+
+# ==========================================
+# 4. MEDIAPIPE Y MOTOR DE VIDEO (HILO PRINCIPAL)
+# ==========================================
 FUENTE_VIDEO = 0
-
-# Camara infrarroja de la pc
 URL_ESP32 = "http://10.97.203.75:81/stream"
+
 cap_pc = cv2.VideoCapture(URL_ESP32)
 
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 
-# camara externa usb
-cap = cv2.VideoCapture(FUENTE_VIDEO)
+# ¡CORRECCIÓN DE BUG! Renombrado cap a cap_local para que coincida con tu ciclo while
+cap_local = cv2.VideoCapture(FUENTE_VIDEO)
 
 def calcular_distancia(p1, p2):
     return math.hypot(p2.x - p1.x, p2.y - p1.y)
@@ -81,41 +157,31 @@ tiempo_ultima_alerta = 0
 cooldown_alertas = 5
 segundos_limite = 1.5
 
-print(f"Iniciando BabyGuard Pro - Face Mesh Monitor: {FUENTE_VIDEO}")
-#print("Presiona 'ESC' en la ventana de video para salir")
+print(f"👁️ Iniciando BabyGuard Pro - Monitor Dual (Día/Noche) en: {FUENTE_VIDEO}")
 
-framerate = 100 # configuracion virtual de framerate
-frames_a_skippear = 1 # configuracion de cuantos frames quiero saltar
-# por ejemplo frames_a_skippear = 1, proceso 1 salto 1 proceso 1 salto 1 - procesamiento vs real 1/2=50%
-# por ejemplo frames_a_skippear = 2, proceso 1 salto 2 proceso 1 salto 2 - procesamiento 1/3=33%
-# por ejemplo frames_a_skippear = 3, proceso 1 salto 3 proceso 1 salto 3 - procesamiento 1/4=25%
+framerate = 100 
+frames_a_skippear = 1 
 
 delay = 1 / float(framerate)
 contador = 0
-
-# Bandera para alternar el procesamiento entre las dos cámaras
 turno_camara_local = True
-
-print("Iniciando BabyGuard Pro - Monitor Dual (Día/Noche)")
 
 with mp_holistic.Holistic(
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5) as holistic_model:
     
     while True:
-        # Siempre leemos AMBAS cámaras para vaciar el buffer y evitar lag
         success_local, frame_local = cap_local.read()
         success_pc, frame_pc = cap_pc.read()
         
         if not success_local and not success_pc:
-            continue # Si ambas fallan, saltar
+            continue
 
         contador += 1
         if contador < frames_a_skippear:
             continue
         contador = 0
 
-        # intercalador de camaras
         turno_camara_local = not turno_camara_local
         
         if turno_camara_local and success_local:
@@ -125,7 +191,6 @@ with mp_holistic.Holistic(
             image = frame_pc.copy()
             origen_camara = "Camara IR"
         else:
-            # Respaldo: si tocaba una cámara pero se desconectó, usamos la otra
             if success_local:
                 image = frame_local.copy()
                 origen_camara = "Camara Local"
@@ -137,7 +202,6 @@ with mp_holistic.Holistic(
         image_mesh = image.copy()
         image_pose = image.copy()
 
-        # Inferencia neuronal sobre la cámara seleccionada en este ciclo
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         resultados = holistic_model.process(image_rgb)
 
@@ -145,7 +209,7 @@ with mp_holistic.Holistic(
         alerta_critica = False
         mensaje_alerta = ""
 
-        # --- A) EVALUACIÓN DE ROSTRO Y LLANTO ---
+        # --- A) EVALUACIÓN DE ROSTRO ---
         if resultados.face_landmarks:
             bebe_presente = True
             tiempo_sin_rostro = None
@@ -166,7 +230,7 @@ with mp_holistic.Holistic(
                     tiempo_actual = time.time()
                     if tiempo_actual - tiempo_ultima_alerta > cooldown_alertas:
                         alerta_critica = True
-                        mensaje_alerta = "¡Bebé en llanto detectado!"
+                        mensaje_alerta = "¡Llanto visual detectado!"
                         tiempo_ultima_alerta = tiempo_actual
             
             mp_drawing.draw_landmarks(
@@ -176,7 +240,6 @@ with mp_holistic.Holistic(
                 landmark_drawing_spec=None,
                 connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style())
             
-            # Etiqueta en pantalla mostrando qué cámara está activa
             cv2.putText(image_mesh, f"Bebe Detectado ({origen_camara})", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
             
         else:
@@ -203,7 +266,7 @@ with mp_holistic.Holistic(
             hombro_der = landmarks[mp_holistic.PoseLandmark.RIGHT_SHOULDER.value]
 
             mp_drawing.draw_landmarks(
-                image_mesh, # Dibujamos en la misma imagen para que Flask muestre todo
+                image_mesh, 
                 resultados.pose_landmarks, 
                 mp_holistic.POSE_CONNECTIONS,
                 landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
@@ -237,33 +300,30 @@ with mp_holistic.Holistic(
             else:
                 tiempo_mala_postura = None
 
-        # Actualizar frame para el stream Flask
         with lock:
             output_frame = image_mesh.copy()
 
         # --- C) ENVÍO A MQTT ---
         if alerta_critica:
             nombre_foto = f"/app/alertas/alerta_{origen_camara.replace(' ', '_')}_{int(time.time())}.png"
-            # Ojo: asegúrate de que el directorio /app/alertas/ exista o quitar /app/alertas/ si estás local
             cv2.imwrite(nombre_foto, original) 
-            print(f"!! (ALERTA) {mensaje_alerta}")
+            print(f"!! (ALERTA VISUAL) {mensaje_alerta}")
             
             try:
                 with open(nombre_foto, "rb") as image_file:
                     encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
                 
                 payload = {
-                    "alerta": "CRITICA",
+                    "alerta": "CRITICA_VIDEO",
                     "mensaje": mensaje_alerta,
                     "imagen_base64": encoded_string
                 }
                 
-                mqtt_client.publish(MQTT_TOPIC, json.dumps(payload))
+                mqtt_client.publish(MQTT_TOPIC_CAMARA, json.dumps(payload))
                 print(f"// (ENVIO) Payload MQTT listo.")
             except Exception as e:
                 print(f"!! (ENVIO) Error enviando la alerta MQTT: {e}")
             
-            # Limpieza de fotos viejas
             fotos = glob.glob('/app/alertas/alerta_*.png')
             fotos.sort()
             if len(fotos) > 20:
